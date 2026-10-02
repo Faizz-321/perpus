@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Clock, Search, CheckCircle, PackageCheck, RefreshCw, Database, Ticket, Check, 
   Filter, Volume2, VolumeX, BellRing, Trash2, Package, Camera, Upload, Eye, X, 
-  AlertCircle, Plus, User, CheckCircle2 
+  AlertCircle, Plus, User, CheckCircle2, Phone, MapPin, MessageCircle 
 } from 'lucide-react';
 import { announceTableOrder } from '../utils/soundAnnouncement';
 
@@ -25,7 +25,8 @@ function StaffDashboard() {
   // ========================================================
   const [lfItems, setLfItems] = useState([]);
   const [loadingLf, setLoadingLf] = useState(false);
-  const [lfTab, setLfTab] = useState('unclaimed'); // 'unclaimed' atau 'claimed'
+  // lfTab: 'found' (Ditemukan Staf), 'user_reports' (Laporan Pengguna), 'claimed' (Riwayat Selesai)
+  const [lfTab, setLfTab] = useState('found');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newLfData, setNewLfData] = useState({ item_name: '', location: '', description: '' });
 
@@ -324,8 +325,10 @@ function StaffDashboard() {
     }
   };
 
-  const unclaimedLf = lfItems.filter(i => i.status !== 'claimed');
+  const staffFoundItems = lfItems.filter(i => (i.type === 'found' || !i.type) && i.status !== 'claimed');
+  const userReportItems = lfItems.filter(i => i.type === 'lost' && i.status !== 'claimed');
   const claimedLf = lfItems.filter(i => i.status === 'claimed');
+  const totalActiveLf = staffFoundItems.length + userReportItems.length;
 
   return (
     <div className="glass-panel">
@@ -375,7 +378,7 @@ function StaffDashboard() {
             fetchLostFound();
           }}
         >
-          <Package size={18} /> Kelola Barang Tertinggal & Foto Bukti
+          <Package size={18} /> Kelola Barang Tertinggal & Laporan Pengunjung
           <span style={{ 
             background: activeModule === 'lost_found' ? 'rgba(0,0,0,0.3)' : 'rgba(245,158,11,0.25)', 
             color: activeModule === 'lost_found' ? '#fff' : '#facc15',
@@ -384,8 +387,20 @@ function StaffDashboard() {
             fontSize: '0.75rem',
             fontWeight: '800'
           }}>
-            {unclaimedLf.length}
+            {totalActiveLf}
           </span>
+          {userReportItems.length > 0 && (
+            <span style={{
+              background: '#ef4444',
+              color: '#fff',
+              fontSize: '0.72rem',
+              fontWeight: '800',
+              padding: '2px 7px',
+              borderRadius: '10px'
+            }} title={`${userReportItems.length} laporan kehilangan baru dari pengunjung`}>
+              {userReportItems.length} Laporan Pengunjung
+            </span>
+          )}
         </button>
       </div>
 
@@ -730,49 +745,109 @@ function StaffDashboard() {
             </div>
           </div>
 
-          {/* Sub Tab: Belum Diambil vs Sudah Diambil */}
-          <div style={{ display: 'flex', gap: '0.8rem', marginBottom: '1.5rem' }}>
+          {/* Sub Tab: Ditemukan Staf vs Laporan Pengguna vs Riwayat Selesai */}
+          <div style={{ display: 'flex', gap: '0.8rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
             <button
-              className={`btn ${lfTab === 'unclaimed' ? '' : 'btn-secondary'}`}
+              className={`btn ${lfTab === 'found' ? '' : 'btn-secondary'}`}
               style={{
-                background: lfTab === 'unclaimed' ? 'var(--primary-color)' : '',
-                padding: '0.45rem 1.1rem',
-                fontSize: '0.85rem'
+                background: lfTab === 'found' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : '',
+                borderColor: lfTab === 'found' ? 'transparent' : 'rgba(245, 158, 11, 0.4)',
+                color: lfTab === 'found' ? '#fff' : '#f59e0b',
+                padding: '0.55rem 1.2rem',
+                fontSize: '0.88rem',
+                fontWeight: '700',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px'
               }}
-              onClick={() => setLfTab('unclaimed')}
+              onClick={() => setLfTab('found')}
             >
-              🔔 Belum Diambil / Ada di Staf ({unclaimedLf.length})
+              <Package size={17} /> 🏢 Ditemukan Staf ({staffFoundItems.length})
+            </button>
+
+            <button
+              className={`btn ${lfTab === 'user_reports' ? '' : 'btn-secondary'}`}
+              style={{
+                background: lfTab === 'user_reports' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : '',
+                borderColor: lfTab === 'user_reports' ? 'transparent' : 'rgba(99, 102, 241, 0.4)',
+                color: lfTab === 'user_reports' ? '#fff' : '#818cf8',
+                padding: '0.55rem 1.2rem',
+                fontSize: '0.88rem',
+                fontWeight: '700',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              onClick={() => setLfTab('user_reports')}
+            >
+              <User size={17} /> 👤 Laporan Pengunjung ({userReportItems.length})
+              {userReportItems.length > 0 && (
+                <span style={{ 
+                  background: lfTab === 'user_reports' ? '#fff' : '#ef4444', 
+                  color: lfTab === 'user_reports' ? '#4f46e5' : '#fff', 
+                  padding: '1px 6px', 
+                  borderRadius: '10px', 
+                  fontSize: '0.72rem', 
+                  fontWeight: '800' 
+                }}>
+                  {userReportItems.length}
+                </span>
+              )}
             </button>
 
             <button
               className={`btn ${lfTab === 'claimed' ? '' : 'btn-secondary'}`}
               style={{
-                background: lfTab === 'claimed' ? 'var(--primary-color)' : '',
-                padding: '0.45rem 1.1rem',
-                fontSize: '0.85rem'
+                background: lfTab === 'claimed' ? 'linear-gradient(135deg, #10b981, #059669)' : '',
+                borderColor: lfTab === 'claimed' ? 'transparent' : 'rgba(16, 185, 129, 0.4)',
+                color: lfTab === 'claimed' ? '#fff' : '#34d399',
+                padding: '0.55rem 1.2rem',
+                fontSize: '0.88rem',
+                fontWeight: '700',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px'
               }}
               onClick={() => setLfTab('claimed')}
             >
-              ✅ Riwayat Sudah Diserahkan ({claimedLf.length})
+              <CheckCircle2 size={17} /> ✅ Riwayat Sudah Diserahkan ({claimedLf.length})
             </button>
           </div>
 
-          {/* Konten Tab 1: Barang yang Belum Diambil (Tersedia Tombol Foto Bukti) */}
-          {lfTab === 'unclaimed' && (
+          {/* Konten Tab 1: Barang yang Ditemukan Staf */}
+          {lfTab === 'found' && (
             <div>
-              {unclaimedLf.length === 0 ? (
+              <div style={{
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                borderRadius: '10px',
+                padding: '0.8rem 1.1rem',
+                marginBottom: '1.2rem',
+                fontSize: '0.85rem',
+                color: '#fde68a',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <Package size={20} color="#f59e0b" style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>Tempat Barang Ditemukan Staf:</strong> Daftar barang tertinggal yang ditemukan petugas di area perpus dan saat ini tersimpan aman di meja staf. Diumumkan di web agar pengunjung yang merasa kehilangan dapat datang mengambil.
+                </span>
+              </div>
+
+              {staffFoundItems.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '3rem 1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '12px' }}>
                   <Package size={40} style={{ color: 'var(--text-muted)', margin: '0 auto 0.6rem auto' }} />
-                  <p style={{ color: 'var(--text-muted)' }}>Tidak ada barang tertinggal yang belum diambil.</p>
+                  <p style={{ color: 'var(--text-muted)' }}>Tidak ada barang temuan staf yang belum diambil.</p>
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.2rem' }}>
-                  {unclaimedLf.map(item => (
+                  {staffFoundItems.map(item => (
                     <div 
                       key={item.id}
                       style={{
                         background: 'linear-gradient(135deg, rgba(25, 30, 46, 0.95), rgba(18, 22, 36, 0.98))',
-                        border: '1.5px solid rgba(245, 158, 11, 0.35)',
+                        border: '1.5px solid rgba(245, 158, 11, 0.4)',
                         borderRadius: '14px',
                         padding: '1.2rem',
                         display: 'flex',
@@ -783,8 +858,18 @@ function StaffDashboard() {
                     >
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                          <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#facc15', fontSize: '0.75rem', fontWeight: '700', padding: '2px 8px', borderRadius: '4px' }}>
-                            📍 {item.location}
+                          <span style={{ 
+                            background: 'rgba(245, 158, 11, 0.25)', 
+                            color: '#facc15', 
+                            fontSize: '0.75rem', 
+                            fontWeight: '700', 
+                            padding: '3px 8px', 
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px'
+                          }}>
+                            🏢 Ditemukan Staf
                           </span>
                           <button
                             onClick={() => handleDeleteLfItem(item.id, item.item_name)}
@@ -795,9 +880,13 @@ function StaffDashboard() {
                           </button>
                         </div>
 
-                        <h3 style={{ fontSize: '1.2rem', color: '#fff', marginBottom: '6px' }}>
+                        <h3 style={{ fontSize: '1.2rem', color: '#fff', marginBottom: '4px' }}>
                           {item.item_name}
                         </h3>
+
+                        <div style={{ fontSize: '0.82rem', color: '#fcd34d', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <MapPin size={13} /> {item.location}
+                        </div>
 
                         <p style={{ fontSize: '0.88rem', color: '#cbd5e1', background: 'rgba(0,0,0,0.25)', padding: '0.75rem', borderRadius: '8px', lineHeight: '1.4', marginBottom: '1rem' }}>
                           {item.description || 'Tidak ada keterangan tambahan.'}
@@ -830,7 +919,7 @@ function StaffDashboard() {
                             setHandoverData({ claimed_by: '', staff_notes: '', proof_photo: null });
                           }}
                         >
-                          <Camera size={18} /> 📸 Serahkan & Ambil Foto Bukti
+                          <Camera size={18} /> 📸 Serahkan ke Pemilik (Foto Bukti)
                         </button>
                       </div>
                     </div>
@@ -840,13 +929,241 @@ function StaffDashboard() {
             </div>
           )}
 
-          {/* Konten Tab 2: Riwayat yang Sudah Diserahkan Lengkap dengan Foto Bukti */}
+          {/* Konten Tab 2: Laporan Kehilangan dari Pengunjung */}
+          {lfTab === 'user_reports' && (
+            <div>
+              <div style={{
+                background: 'rgba(99, 102, 241, 0.1)',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+                borderRadius: '10px',
+                padding: '0.8rem 1.1rem',
+                marginBottom: '1.2rem',
+                fontSize: '0.85rem',
+                color: '#c7d2fe',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <User size={20} color="#818cf8" style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>Tempat Laporan dari Pengunjung:</strong> Daftar barang hilang yang dilaporkan oleh pengunjung/pengguna perpustakaan lewat website. Jika staf menemukan barang yang cocok, segera hubungi kontak yang tertera.
+                </span>
+              </div>
+
+              {userReportItems.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3rem 1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '12px' }}>
+                  <CheckCircle2 size={40} style={{ color: '#818cf8', margin: '0 auto 0.6rem auto' }} />
+                  <p style={{ color: 'var(--text-muted)' }}>Tidak ada laporan kehilangan dari pengunjung saat ini.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.2rem' }}>
+                  {userReportItems.map(item => {
+                    const cleanPhone = item.contact ? item.contact.replace(/[^0-9]/g, '') : '';
+                    const waNumber = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone;
+                    const canWhatsApp = cleanPhone.length >= 8;
+
+                    const notFoundMsg = `Halo kak, kami dari Staf Perpustakaan Parepare. Menindaklanjuti laporan kehilangan barang Anda (${item.item_name}), petugas kami telah menyisir dan memeriksa area perpustakaan, namun saat ini barang BELUM DITEMUKAN. Laporan Kakak tetap kami simpan, dan jika sewaktu-waktu ada petugas atau pengunjung lain yang menemukan dan mengantarkannya ke meja staf, kami akan segera mengabari Kakak kembali. Terima kasih atas kesabarannya 🙏`;
+
+                    const foundMsg = `Halo kak, kabar baik dari Staf Perpustakaan Parepare! Mengenai laporan kehilangan barang Anda (${item.item_name}), barang tersebut SUDAH DITEMUKAN dan saat ini tersimpan aman di Meja Pelayanan Staf. Silakan datang ke perpustakaan untuk mengambilnya ya. Terima kasih 🙏`;
+
+                    return (
+                      <div 
+                        key={item.id}
+                        style={{
+                          background: 'linear-gradient(135deg, rgba(28, 25, 48, 0.95), rgba(18, 20, 36, 0.98))',
+                          border: '1.5px solid rgba(99, 102, 241, 0.45)',
+                          borderRadius: '14px',
+                          padding: '1.2rem',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          boxShadow: '0 8px 20px rgba(0,0,0,0.25)'
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                            <span style={{ 
+                              background: 'rgba(99, 102, 241, 0.25)', 
+                              color: '#a5b4fc', 
+                              fontSize: '0.75rem', 
+                              fontWeight: '700', 
+                              padding: '3px 8px', 
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px'
+                            }}>
+                              👤 Laporan Pengunjung
+                            </span>
+                            <button
+                              onClick={() => handleDeleteLfItem(item.id, item.item_name)}
+                              style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
+                              title="Hapus / Tutup Laporan"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+
+                          <h3 style={{ fontSize: '1.2rem', color: '#fff', marginBottom: '4px' }}>
+                            {item.item_name}
+                          </h3>
+
+                          <div style={{ fontSize: '0.82rem', color: '#a5b4fc', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <MapPin size={13} /> Hilang di: {item.location}
+                          </div>
+
+                          <p style={{ fontSize: '0.88rem', color: '#cbd5e1', background: 'rgba(0,0,0,0.25)', padding: '0.75rem', borderRadius: '8px', lineHeight: '1.4', marginBottom: '0.9rem' }}>
+                            {item.description || 'Tidak ada ciri-ciri/keterangan tambahan.'}
+                          </p>
+
+                          {/* Info Kontak & Tombol Respon WhatsApp Cepat */}
+                          <div style={{ 
+                            background: 'rgba(99, 102, 241, 0.12)', 
+                            border: '1px solid rgba(99, 102, 241, 0.25)', 
+                            borderRadius: '10px', 
+                            padding: '0.85rem', 
+                            marginBottom: '1rem' 
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontSize: '0.75rem', color: '#a5b4fc', fontWeight: '600' }}>
+                                📞 Kontak Pelapor / Pengunjung:
+                              </span>
+                              {canWhatsApp && (
+                                <span style={{ fontSize: '0.7rem', color: '#86efac', fontWeight: '700' }}>
+                                  ● Siap WhatsApp
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#fff', marginBottom: canWhatsApp ? '8px' : '0' }}>
+                              {item.contact || '(Tidak mencantumkan kontak)'}
+                            </div>
+
+                            {canWhatsApp ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {/* Tombol 1: Kabari Belum Ditemukan (1-Klik WA) */}
+                                <a
+                                  href={`https://wa.me/${waNumber}?text=${encodeURIComponent(notFoundMsg)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="btn"
+                                  style={{
+                                    fontSize: '0.76rem',
+                                    padding: '0.45rem 0.8rem',
+                                    background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                                    color: '#fff',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    fontWeight: '700',
+                                    borderRadius: '7px',
+                                    textDecoration: 'none',
+                                    boxShadow: '0 2px 8px rgba(245, 158, 11, 0.25)'
+                                  }}
+                                  title="Kirim pesan sopan bahwa barang belum ditemukan setelah disisir staf"
+                                >
+                                  <MessageCircle size={15} /> 💬 Kabari Belum Ditemukan (1-Klik WA)
+                                </a>
+
+                                {/* Tombol 2: Kabari Sudah Ketemu (1-Klik WA) */}
+                                <a
+                                  href={`https://wa.me/${waNumber}?text=${encodeURIComponent(foundMsg)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="btn"
+                                  style={{
+                                    fontSize: '0.76rem',
+                                    padding: '0.45rem 0.8rem',
+                                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                                    color: '#fff',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    fontWeight: '700',
+                                    borderRadius: '7px',
+                                    textDecoration: 'none',
+                                    boxShadow: '0 2px 8px rgba(16, 185, 129, 0.25)'
+                                  }}
+                                  title="Kirim pesan bahwa barang sudah ditemukan dan siap diambil"
+                                >
+                                  <MessageCircle size={15} /> 💬 Kabari Sudah Ketemu (1-Klik WA)
+                                </a>
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px' }}>
+                                (Format kontak bukan nomor WhatsApp valid)
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Clock size={12} /> Dilaporkan: {item.report_date ? item.report_date.slice(0, 10) : 'Hari ini'}
+                          </div>
+
+                          {/* Tombol Serahkan jika barang ditemukan & diambil */}
+                          <button
+                            className="btn"
+                            style={{
+                              width: '100%',
+                              background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                              border: 'none',
+                              color: '#fff',
+                              fontWeight: '700',
+                              padding: '0.65rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '8px',
+                              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.35)'
+                            }}
+                            onClick={() => {
+                              setHandoverModalItem(item);
+                              setHandoverData({ 
+                                claimed_by: '', 
+                                staff_notes: `Barang temuan cocok dengan laporan pengunjung (${item.contact || ''})`, 
+                                proof_photo: null 
+                              });
+                            }}
+                          >
+                            <Camera size={18} /> 📸 Barang Ditemukan (Serah Terima & Foto)
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Konten Tab 3: Riwayat yang Sudah Diserahkan Lengkap dengan Foto Bukti */}
           {lfTab === 'claimed' && (
             <div>
+              <div style={{
+                background: 'rgba(16, 185, 129, 0.1)',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                borderRadius: '10px',
+                padding: '0.8rem 1.1rem',
+                marginBottom: '1.2rem',
+                fontSize: '0.85rem',
+                color: '#a7f3d0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <CheckCircle2 size={20} color="#10b981" style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>Riwayat Selesai Diserahkan:</strong> Seluruh arsip barang yang telah diambil oleh pemiliknya dan dilengkapi foto dokumentasi serah terima sebagai barang bukti sah.
+                </span>
+              </div>
+
               {claimedLf.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '3rem 1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '12px' }}>
                   <CheckCircle2 size={40} style={{ color: 'var(--text-muted)', margin: '0 auto 0.6rem auto' }} />
-                  <p style={{ color: 'var(--text-muted)' }}>Belum ada barang yang diserahkan.</p>
+                  <p style={{ color: 'var(--text-muted)' }}>Belum ada riwayat barang yang diserahkan.</p>
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.2rem' }}>
@@ -862,9 +1179,20 @@ function StaffDashboard() {
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
-                        <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: 'var(--success)', fontSize: '0.75rem', fontWeight: '700', padding: '2px 8px', borderRadius: '4px' }}>
-                          ✓ Sudah Diserahkan
-                        </span>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: 'var(--success)', fontSize: '0.75rem', fontWeight: '700', padding: '2px 8px', borderRadius: '4px' }}>
+                            ✓ Sudah Diserahkan
+                          </span>
+                          <span style={{ 
+                            background: item.type === 'lost' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(245, 158, 11, 0.2)', 
+                            color: item.type === 'lost' ? '#a5b4fc' : '#fcd34d', 
+                            fontSize: '0.72rem', 
+                            padding: '2px 6px', 
+                            borderRadius: '4px' 
+                          }}>
+                            {item.type === 'lost' ? '👤 Dari Laporan Pengunjung' : '🏢 Temuan Staf'}
+                          </span>
+                        </div>
                         <button
                           onClick={() => handleDeleteLfItem(item.id, item.item_name)}
                           style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
