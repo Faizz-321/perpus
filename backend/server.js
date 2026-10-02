@@ -155,7 +155,7 @@ app.delete('/api/orders/:id', (req, res) => {
 });
 
 // ------------------------------------------
-// FITUR 2: BOOKS (Katalog Buku)
+// FITUR 2: BOOKS (Katalog Buku & Rating)
 // ------------------------------------------
 app.get('/api/books', (req, res) => {
   const query = 'SELECT * FROM books ORDER BY id ASC';
@@ -167,6 +167,117 @@ app.get('/api/books', (req, res) => {
     res.json(results);
   });
 });
+
+// Beri rating bintang pada buku (berdasarkan ID buku)
+app.post('/api/books/:id/rate', (req, res) => {
+  const { id } = req.params;
+  const { rating, review_text, table_no } = req.body;
+  const numRating = parseInt(rating);
+
+  if (!numRating || numRating < 1 || numRating > 5) {
+    return res.status(400).json({ error: 'Rating harus berupa angka antara 1 sampai 5 bintang' });
+  }
+
+  // 1. Simpan ulasan ke tabel book_ratings
+  const insertQuery = 'INSERT INTO book_ratings (book_id, rating, review_text, table_no) VALUES (?, ?, ?, ?)';
+  pool.query(insertQuery, [id, numRating, review_text || null, table_no || null], (err) => {
+    if (err) {
+      console.error('Error INSERT book_ratings:', err);
+      return res.status(500).json({ error: 'Gagal mencatat rating buku' });
+    }
+
+    // 2. Update nilai rata-rata rating, rating_count, dan read_count di tabel books
+    const updateQuery = `
+      UPDATE books 
+      SET 
+        rating = ROUND(((rating * rating_count) + ?) / (rating_count + 1), 1),
+        rating_count = rating_count + 1,
+        read_count = read_count + 1
+      WHERE id = ?
+    `;
+
+    pool.query(updateQuery, [numRating, id], (errUpdate) => {
+      if (errUpdate) {
+        console.error('Error UPDATE books rating:', errUpdate);
+        return res.status(500).json({ error: 'Gagal memperbarui kalkulasi rating buku' });
+      }
+
+      // Ambil data buku terbaru setelah di-rate
+      pool.query('SELECT id, title, rating, rating_count, read_count FROM books WHERE id = ?', [id], (errGet, rows) => {
+        if (errGet || rows.length === 0) {
+          return res.json({ message: 'Rating berhasil disimpan!', rating: numRating });
+        }
+        res.json({
+          message: 'Rating berhasil disimpan! Terima kasih atas ulasannya.',
+          book: rows[0]
+        });
+      });
+    });
+  });
+});
+
+// Beri rating berdasarkan judul buku (berguna saat selesai membaca dari tiket pesanan)
+app.post('/api/books/rate-by-title', (req, res) => {
+  const { title, rating, review_text, table_no } = req.body;
+  const numRating = parseInt(rating);
+
+  if (!title || !numRating || numRating < 1 || numRating > 5) {
+    return res.status(400).json({ error: 'Judul buku dan rating valid (1-5) wajib diisi' });
+  }
+
+  // Cari ID buku berdasarkan judul (case-insensitive atau LIKE)
+  const cleanTitle = title.trim();
+  pool.query('SELECT id FROM books WHERE LOWER(title) = LOWER(?) LIMIT 1', [cleanTitle], (err, rows) => {
+    if (err || rows.length === 0) {
+      // Jika tidak ketemu exact, coba pencarian LIKE
+      pool.query('SELECT id FROM books WHERE title LIKE ? LIMIT 1', [`%${cleanTitle}%`], (errLike, rowsLike) => {
+        if (errLike || rowsLike.length === 0) {
+          return res.status(404).json({ error: 'Buku tidak ditemukan di katalog' });
+        }
+        const bookId = rowsLike[0].id;
+        rateBookById(bookId, numRating, review_text, table_no, res);
+      });
+      return;
+    }
+    const bookId = rows[0].id;
+    rateBookById(bookId, numRating, review_text, table_no, res);
+  });
+});
+
+// Helper function untuk rate book
+function rateBookById(bookId, numRating, review_text, table_no, res) {
+  const insertQuery = 'INSERT INTO book_ratings (book_id, rating, review_text, table_no) VALUES (?, ?, ?, ?)';
+  pool.query(insertQuery, [bookId, numRating, review_text || null, table_no || null], (err) => {
+    if (err) {
+      console.error('Error INSERT book_ratings:', err);
+      return res.status(500).json({ error: 'Gagal mencatat rating' });
+    }
+
+    const updateQuery = `
+      UPDATE books 
+      SET 
+        rating = ROUND(((rating * rating_count) + ?) / (rating_count + 1), 1),
+        rating_count = rating_count + 1,
+        read_count = read_count + 1
+      WHERE id = ?
+    `;
+
+    pool.query(updateQuery, [numRating, bookId], (errUpdate) => {
+      if (errUpdate) {
+        console.error('Error UPDATE rating:', errUpdate);
+        return res.status(500).json({ error: 'Gagal kalkulasi rating' });
+      }
+
+      pool.query('SELECT id, title, rating, rating_count, read_count FROM books WHERE id = ?', [bookId], (errGet, rows) => {
+        res.json({
+          message: 'Rating berhasil disimpan!',
+          book: rows && rows.length > 0 ? rows[0] : null
+        });
+      });
+    });
+  });
+}
+
 
 // ------------------------------------------
 // FITUR 3: TABLE BOOKINGS (Reservasi Meja)

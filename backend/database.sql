@@ -20,8 +20,24 @@ CREATE TABLE IF NOT EXISTS `books` (
   `category` VARCHAR(100) DEFAULT 'Novel',
   `shelf_location` VARCHAR(100) DEFAULT 'Lemari 3, Rak 1',
   `stock` INT DEFAULT 1,
+  `rating` DECIMAL(3,1) DEFAULT 4.5,
+  `rating_count` INT DEFAULT 5,
+  `read_count` INT DEFAULT 12,
   `cover_url` VARCHAR(500) DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------
+-- 1.1 TABEL ULASAN & RATING BUKU (Book Ratings)
+-- ---------------------------------------------------
+CREATE TABLE IF NOT EXISTS `book_ratings` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `book_id` INT NOT NULL,
+  `rating` INT NOT NULL,
+  `review_text` VARCHAR(500) NULL,
+  `table_no` VARCHAR(50) NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_book` (`book_id`)
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------
