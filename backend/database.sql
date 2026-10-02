@@ -72,11 +72,16 @@ CREATE TABLE IF NOT EXISTS `table_bookings` (
 CREATE TABLE IF NOT EXISTS `lost_found` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `item_name` VARCHAR(255) NOT NULL,
-  `type` ENUM('found', 'lost') NOT NULL,
+  `type` ENUM('found', 'lost') NOT NULL DEFAULT 'found',
   `location` VARCHAR(255) NOT NULL,
+  `description` TEXT NULL,
   `report_date` DATE NOT NULL,
+  `status` ENUM('unclaimed', 'claimed') DEFAULT 'unclaimed',
+  `claimed_by` VARCHAR(255) NULL,
+  `claimed_at` DATETIME NULL,
+  `proof_photo` LONGTEXT NULL,
+  `staff_notes` VARCHAR(255) NULL,
   `contact` VARCHAR(100) DEFAULT NULL,
-  `status` ENUM('open', 'claimed', 'closed') DEFAULT 'open',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 

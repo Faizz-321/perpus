@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { BookOpen, Library, Search, CalendarClock, Users } from 'lucide-react';
+import { BookOpen, Library, Search, CalendarClock, Users, Package } from 'lucide-react';
 import Home from './components/Home';
 import QRSystem from './components/QRSystem';
 import StaffDashboard from './components/StaffDashboard';
@@ -25,6 +25,10 @@ function Nav() {
         <Link to="/qr-system" className={`nav-link ${location.pathname === '/qr-system' ? 'active' : ''}`}>
           <BookOpen size={20} />
           Pesan Pinjam Buku
+        </Link>
+        <Link to="/lost-found" className={`nav-link ${location.pathname === '/lost-found' ? 'active' : ''}`}>
+          <Package size={20} />
+          Barang Tertinggal
         </Link>
         <Link to="/staff" className={`nav-link ${location.pathname === '/staff' ? 'active' : ''}`}>
           <Users size={20} />

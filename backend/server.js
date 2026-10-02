@@ -6,7 +6,8 @@ const app = express();
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ limit: '25mb', extended: true }));
 
 // Konfigurasi Koneksi Database MySQL (XAMPP Default)
 // Menggunakan createPool agar koneksi lebih stabil dan otomatis reconnect
@@ -20,7 +21,7 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
-// Uji coba koneksi pertama kali
+// Uji coba koneksi pertama kali & inisialisasi tabel
 pool.getConnection((err, connection) => {
   if (err) {
     console.error('❌ Gagal terhubung ke database MySQL XAMPP:', err.message);
@@ -29,7 +30,55 @@ pool.getConnection((err, connection) => {
   }
   console.log('✅ Berhasil terhubung ke database MySQL (bibliotech_db) di XAMPP!');
   connection.release();
+  initLostFoundTable();
 });
+
+// Inisialisasi tabel lost_found & kolom bukti foto
+function initLostFoundTable() {
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS lost_found (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      item_name VARCHAR(255) NOT NULL,
+      type ENUM('found', 'lost') NOT NULL DEFAULT 'found',
+      location VARCHAR(255) NOT NULL,
+      description TEXT NULL,
+      report_date DATE NOT NULL,
+      status ENUM('unclaimed', 'claimed') DEFAULT 'unclaimed',
+      claimed_by VARCHAR(255) NULL,
+      claimed_at DATETIME NULL,
+      proof_photo LONGTEXT NULL,
+      staff_notes VARCHAR(255) NULL,
+      contact VARCHAR(100) DEFAULT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `, () => {
+    const alterQueries = [
+      "ALTER TABLE lost_found ADD COLUMN IF NOT EXISTS description TEXT NULL",
+      "ALTER TABLE lost_found ADD COLUMN IF NOT EXISTS claimed_by VARCHAR(255) NULL",
+      "ALTER TABLE lost_found ADD COLUMN IF NOT EXISTS claimed_at DATETIME NULL",
+      "ALTER TABLE lost_found ADD COLUMN IF NOT EXISTS proof_photo LONGTEXT NULL",
+      "ALTER TABLE lost_found ADD COLUMN IF NOT EXISTS staff_notes VARCHAR(255) NULL"
+    ];
+    alterQueries.forEach(q => pool.query(q, () => {}));
+
+    // Cek sampel awal, jika kosong isi sampel realistis perpustakaan
+    pool.query("SELECT COUNT(*) as count FROM lost_found WHERE type = 'found'", (err, rows) => {
+      if (!err && rows && rows[0].count === 0) {
+        const samples = [
+          ['Cas HP Samsung Type-C Hitam', 'found', 'Meja 4 (Lantai 1)', 'Tertinggal di colokan bawah meja setelah jam baca siang. Tersimpan aman di meja staf.', 'unclaimed'],
+          ['Tumbler Stainless Biru Dongker', 'found', 'Meja 12 (Zona Baca Tenang)', 'Tertinggal di sudut meja dekat rak majalah. Berisi air minum setengah.', 'unclaimed'],
+          ['Kacamata Baca Frame Hitam', 'found', 'Area Lemari 3 (Sastra)', 'Ditemukan di dekat rak 2 novel fiksi.', 'unclaimed']
+        ];
+        samples.forEach(s => {
+          pool.query(
+            "INSERT INTO lost_found (item_name, type, location, description, status, report_date) VALUES (?, ?, ?, ?, ?, CURDATE())",
+            s
+          );
+        });
+      }
+    });
+  });
+}
 
 // ==========================================
 // API ENDPOINTS (Rute Backend)
@@ -306,7 +355,7 @@ app.post('/api/table-bookings', (req, res) => {
 });
 
 // ------------------------------------------
-// FITUR 4: LOST & FOUND (Barang Hilang / Temuan)
+// FITUR 4: LOST & FOUND (Pemberitahuan Barang Tertinggal & Bukti Serah Terima)
 // ------------------------------------------
 app.get('/api/lost-found', (req, res) => {
   const query = 'SELECT * FROM lost_found ORDER BY created_at DESC';
@@ -319,15 +368,64 @@ app.get('/api/lost-found', (req, res) => {
   });
 });
 
+// Staf membuat pengumuman barang tertinggal baru (hanya tulisan teks)
 app.post('/api/lost-found', (req, res) => {
-  const { item_name, type, location, contact } = req.body;
-  const query = 'INSERT INTO lost_found (item_name, type, location, report_date, contact) VALUES (?, ?, ?, CURDATE(), ?)';
-  pool.query(query, [item_name, type, location, contact], (err, result) => {
+  const { item_name, type, location, description, contact } = req.body;
+  if (!item_name || !location) {
+    return res.status(400).json({ error: 'Nama barang dan lokasi wajib diisi' });
+  }
+
+  const query = 'INSERT INTO lost_found (item_name, type, location, description, report_date, status, contact) VALUES (?, ?, ?, ?, CURDATE(), "unclaimed", ?)';
+  pool.query(query, [item_name, type || 'found', location, description || '', contact || null], (err, result) => {
     if (err) {
       console.error('Error POST /api/lost-found:', err);
-      return res.status(500).json({ error: 'Gagal menyimpan laporan barang' });
+      return res.status(500).json({ error: 'Gagal menyimpan pengumuman barang' });
     }
-    res.status(201).json({ message: 'Laporan barang berhasil disimpan!', itemId: result.insertId });
+    res.status(201).json({ message: 'Pengumuman barang berhasil disimpan!', itemId: result.insertId });
+  });
+});
+
+// Staf menyerahkan barang ke pemilik beserta foto bukti serah terima
+app.put('/api/lost-found/:id/handover', (req, res) => {
+  const { id } = req.params;
+  const { claimed_by, proof_photo, staff_notes } = req.body;
+
+  if (!claimed_by) {
+    return res.status(400).json({ error: 'Nama penerima barang wajib diisi sebagai bukti serah terima' });
+  }
+
+  const query = `
+    UPDATE lost_found 
+    SET 
+      status = 'claimed', 
+      claimed_by = ?, 
+      claimed_at = NOW(), 
+      proof_photo = ?, 
+      staff_notes = ? 
+    WHERE id = ?
+  `;
+
+  pool.query(query, [claimed_by, proof_photo || null, staff_notes || null, id], (err, result) => {
+    if (err) {
+      console.error('Error PUT /api/lost-found/:id/handover:', err);
+      return res.status(500).json({ error: 'Gagal mencatat bukti serah terima' });
+    }
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Data barang tidak ditemukan' });
+    }
+    res.json({ message: 'Barang berhasil diserahkan dan foto bukti telah disimpan!', id });
+  });
+});
+
+// Hapus catatan barang jika keliru/dibersihkan
+app.delete('/api/lost-found/:id', (req, res) => {
+  const { id } = req.params;
+  pool.query('DELETE FROM lost_found WHERE id = ?', [id], (err, result) => {
+    if (err) {
+      console.error('Error DELETE /api/lost-found/:id:', err);
+      return res.status(500).json({ error: 'Gagal menghapus data' });
+    }
+    res.json({ message: 'Data berhasil dihapus', id });
   });
 });
 

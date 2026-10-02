@@ -1,19 +1,47 @@
-import { useState, useEffect } from 'react';
-import { Clock, Search, CheckCircle, PackageCheck, RefreshCw, Database, Ticket, Check, Filter, Volume2, VolumeX, BellRing, Trash2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { 
+  Clock, Search, CheckCircle, PackageCheck, RefreshCw, Database, Ticket, Check, 
+  Filter, Volume2, VolumeX, BellRing, Trash2, Package, Camera, Upload, Eye, X, 
+  AlertCircle, Plus, User, CheckCircle2 
+} from 'lucide-react';
 import { announceTableOrder } from '../utils/soundAnnouncement';
 
 function StaffDashboard() {
+  // Modul Aktif: 'orders' (Pesanan Buku Meja) atau 'lost_found' (Barang Tertinggal)
+  const [activeModule, setActiveModule] = useState('orders');
+
+  // ========================================================
+  // STATE PESANAN BUKU MEJA
+  // ========================================================
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isDbConnected, setIsDbConnected] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Tab Filter Status: 'all', 'in_progress', 'ready', 'completed', 'cancelled'
   const [statusFilter, setStatusFilter] = useState('all');
-
-  // Pengaturan Suara Panggilan Speaker
   const [soundEnabled, setSoundEnabled] = useState(true);
 
+  // ========================================================
+  // STATE BARANG TERTINGGAL (LOST & FOUND)
+  // ========================================================
+  const [lfItems, setLfItems] = useState([]);
+  const [loadingLf, setLoadingLf] = useState(false);
+  const [lfTab, setLfTab] = useState('unclaimed'); // 'unclaimed' atau 'claimed'
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newLfData, setNewLfData] = useState({ item_name: '', location: '', description: '' });
+
+  // State Modal Kamera & Serah Terima Barang Bukti
+  const [handoverModalItem, setHandoverModalItem] = useState(null);
+  const [handoverData, setHandoverData] = useState({ claimed_by: '', staff_notes: '', proof_photo: null });
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+
+  // State Lihat Foto Bukti Pembesaran
+  const [viewPhotoItem, setViewPhotoItem] = useState(null);
+
+  // --------------------------------------------------------
+  // FETCH ORDERS (Pesanan Buku)
+  // --------------------------------------------------------
   const fetchOrders = async () => {
     setLoading(true);
     try {
@@ -52,14 +80,40 @@ function StaffDashboard() {
     }
   };
 
+  // --------------------------------------------------------
+  // FETCH LOST & FOUND ITEMS
+  // --------------------------------------------------------
+  const fetchLostFound = async () => {
+    setLoadingLf(true);
+    try {
+      const res = await fetch('http://localhost:5000/api/lost-found');
+      if (res.ok) {
+        const data = await res.json();
+        setLfItems(data);
+      }
+    } catch (e) {
+      console.warn('Gagal ambil data lost & found:', e);
+    } finally {
+      setLoadingLf(false);
+    }
+  };
+
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(fetchOrders, 4000); // Polling otomatis tiap 4 detik
+    fetchLostFound();
+    const interval = setInterval(() => {
+      fetchOrders();
+      if (activeModule === 'lost_found') {
+        fetchLostFound();
+      }
+    }, 4000);
     return () => clearInterval(interval);
-  }, []);
+  }, [activeModule]);
 
+  // --------------------------------------------------------
+  // HANDLERS PESANAN BUKU
+  // --------------------------------------------------------
   const updateStatus = async (id, newStatus) => {
-    // Optimistic UI update
     setOrders((prev) =>
       prev.map((order) => (order.id === id ? { ...order, status: newStatus } : order))
     );
@@ -75,7 +129,6 @@ function StaffDashboard() {
     }
   };
 
-  // Ubah status ke ready dan bunyikan pengumuman suara panggilan
   const handleReadyAndAnnounce = (order) => {
     updateStatus(order.id, 'ready');
     if (soundEnabled) {
@@ -83,472 +136,1148 @@ function StaffDashboard() {
     }
   };
 
-  // Hapus satu pesanan spesifik
   const handleDeleteOrder = async (id, ticketCode) => {
     if (!window.confirm(`Hapus pesanan tiket ${ticketCode} dari sistem perpustakaan?`)) return;
-
-    // Optimistic UI update
     setOrders((prev) => prev.filter((order) => order.id !== id));
-
     try {
-      await fetch(`http://localhost:5000/api/orders/${id}`, {
-        method: 'DELETE',
-      });
+      await fetch(`http://localhost:5000/api/orders/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.error('Gagal menghapus pesanan:', err);
     }
   };
 
-  // Bersihkan semua pesanan yang sudah selesai dan dibatalkan sekaligus
   const handleCleanupCompleted = async () => {
     const totalToClean = counts.completed + counts.cancelled;
     if (totalToClean === 0) {
       alert('Tidak ada riwayat pesanan selesai atau dibatalkan untuk dibersihkan.');
       return;
     }
-
     if (!window.confirm(`Bersihkan ${totalToClean} riwayat pesanan yang sudah Selesai & Dibatalkan agar antrean bersih?`)) return;
-
-    // Optimistic UI update
     setOrders((prev) => prev.filter((o) => o.status !== 'completed' && o.status !== 'cancelled'));
-
     try {
-      await fetch('http://localhost:5000/api/orders/cleanup/completed', {
-        method: 'DELETE',
-      });
+      await fetch('http://localhost:5000/api/orders/cleanup/completed', { method: 'DELETE' });
     } catch (err) {
       console.error('Gagal membersihkan riwayat pesanan:', err);
     }
   };
 
-  const getStatusBadge = (status) => {
-    switch(status) {
-      case 'pending':
-        return <span className="status-badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: 'var(--warning)' }}><Clock size={12} style={{display: 'inline', marginRight: '4px'}}/> Menunggu</span>;
-      case 'searching':
-        return <span className="status-badge" style={{ background: 'rgba(99, 102, 241, 0.2)', color: 'var(--primary-color)' }}><Search size={12} style={{display: 'inline', marginRight: '4px'}}/> Sedang Dicari</span>;
-      case 'ready':
-        return <span className="status-badge" style={{ background: 'rgba(16, 185, 129, 0.25)', color: 'var(--success)', border: '1px solid var(--success)' }}><CheckCircle size={12} style={{display: 'inline', marginRight: '4px'}}/> Siap Diambil</span>;
-      case 'completed':
-        return <span className="status-badge" style={{ background: 'rgba(255, 255, 255, 0.1)', color: 'var(--text-muted)' }}><PackageCheck size={12} style={{display: 'inline', marginRight: '4px'}}/> Selesai (Diserahkan)</span>;
-      case 'cancelled':
-        return <span className="status-badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: 'var(--danger)' }}>Dibatalkan</span>;
-      default:
-        return null;
+  // --------------------------------------------------------
+  // HANDLERS BARANG TERTINGGAL (LOST & FOUND)
+  // --------------------------------------------------------
+  const handleCreateAnnouncement = async (e) => {
+    e.preventDefault();
+    if (!newLfData.item_name || !newLfData.location) return;
+
+    try {
+      const res = await fetch('http://localhost:5000/api/lost-found', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          item_name: newLfData.item_name,
+          location: newLfData.location,
+          description: newLfData.description,
+          type: 'found'
+        })
+      });
+      if (res.ok) {
+        alert('📢 Pengumuman barang tertinggal berhasil dipublikasikan ke sisi pengunjung!');
+        setShowCreateModal(false);
+        setNewLfData({ item_name: '', location: '', description: '' });
+        fetchLostFound();
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  // Hitung jumlah data per status untuk badge filter
+  // Kamera Control
+  const startCamera = async () => {
+    setIsCameraActive(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    } catch (err) {
+      console.warn('Gagal akses webcam:', err);
+      alert('Tidak dapat mengakses kamera secara langsung. Silakan gunakan tombol "Pilih dari Galeri / File Foto" di bawah.');
+      setIsCameraActive(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth || 640;
+    canvas.height = videoRef.current.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    setHandoverData(prev => ({ ...prev, proof_photo: dataUrl }));
+    stopCamera();
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setHandoverData(prev => ({ ...prev, proof_photo: reader.result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveHandover = async () => {
+    if (!handoverData.claimed_by.trim()) {
+      alert('Silakan isi Nama Orang yang Mengambil barang.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`http://localhost:5000/api/lost-found/${handoverModalItem.id}/handover`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          claimed_by: handoverData.claimed_by,
+          proof_photo: handoverData.proof_photo,
+          staff_notes: handoverData.staff_notes
+        })
+      });
+
+      if (res.ok) {
+        alert('✓ Barang berhasil diserahkan ke pemilik dan foto bukti serah terima telah tersimpan!');
+        stopCamera();
+        setHandoverModalItem(null);
+        setHandoverData({ claimed_by: '', staff_notes: '', proof_photo: null });
+        fetchLostFound();
+      }
+    } catch (err) {
+      console.error('Gagal mencatat serah terima:', err);
+    }
+  };
+
+  const handleDeleteLfItem = async (id, name) => {
+    if (!window.confirm(`Hapus catatan barang "${name}" dari arsip sistem?`)) return;
+    try {
+      await fetch(`http://localhost:5000/api/lost-found/${id}`, { method: 'DELETE' });
+      fetchLostFound();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Filter Orders
   const counts = {
     all: orders.length,
-    in_progress: orders.filter(o => o.status === 'pending' || o.status === 'searching').length,
-    ready: orders.filter(o => o.status === 'ready').length,
-    completed: orders.filter(o => o.status === 'completed').length,
-    cancelled: orders.filter(o => o.status === 'cancelled').length,
+    in_progress: orders.filter((o) => o.status === 'pending' || o.status === 'searching').length,
+    ready: orders.filter((o) => o.status === 'ready').length,
+    completed: orders.filter((o) => o.status === 'completed').length,
+    cancelled: orders.filter((o) => o.status === 'cancelled').length,
   };
 
-  // Filter gabungan (Tab Status + Kata Kunci Pencarian)
-  const filteredOrders = orders.filter(order => {
-    // 1. Filter berdasarkan tab status yang dipilih
-    if (statusFilter === 'in_progress' && order.status !== 'pending' && order.status !== 'searching') {
-      return false;
-    }
-    if (statusFilter === 'ready' && order.status !== 'ready') {
-      return false;
-    }
-    if (statusFilter === 'completed' && order.status !== 'completed') {
-      return false;
-    }
-    if (statusFilter === 'cancelled' && order.status !== 'cancelled') {
-      return false;
-    }
+  const filteredOrders = orders.filter((order) => {
+    let matchStatus = true;
+    if (statusFilter === 'in_progress') matchStatus = order.status === 'pending' || order.status === 'searching';
+    else if (statusFilter === 'ready') matchStatus = order.status === 'ready';
+    else if (statusFilter === 'completed') matchStatus = order.status === 'completed';
+    else if (statusFilter === 'cancelled') matchStatus = order.status === 'cancelled';
 
-    // 2. Filter berdasarkan teks pencarian
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return (
-        order.ticket_code.toLowerCase().includes(q) ||
-        order.table.toLowerCase().includes(q) ||
-        order.book.toLowerCase().includes(q)
-      );
-    }
-
-    return true;
+    if (!searchQuery.trim()) return matchStatus;
+    const q = searchQuery.toLowerCase();
+    const matchTicket = order.ticket_code && order.ticket_code.toLowerCase().includes(q);
+    const matchTable = order.table && order.table.toLowerCase().includes(q);
+    const matchBook = order.book && order.book.toLowerCase().includes(q);
+    return matchStatus && (matchTicket || matchTable || matchBook);
   });
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'pending': return <span className="status-badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: 'var(--warning)' }}>1. Perlu Dicari</span>;
+      case 'searching': return <span className="status-badge" style={{ background: 'rgba(99, 102, 241, 0.2)', color: 'var(--primary-color)' }}>2. Sedang Mengambil</span>;
+      case 'ready': return <span className="status-badge" style={{ background: 'rgba(16, 185, 129, 0.25)', color: 'var(--success)', border: '1px solid var(--success)' }}>3. Siap Diambil di Meja</span>;
+      case 'completed': return <span className="status-badge" style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)' }}>4. Selesai</span>;
+      case 'cancelled': return <span className="status-badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: 'var(--danger)' }}>Dibatalkan</span>;
+      default: return null;
+    }
+  };
+
+  const unclaimedLf = lfItems.filter(i => i.status !== 'claimed');
+  const claimedLf = lfItems.filter(i => i.status === 'claimed');
 
   return (
     <div className="glass-panel">
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <h1>Dashboard Staf (Verifikasi Tiket)</h1>
-          <p>Kelola dan verifikasi <strong>Kode Tiket</strong> pesanan buku dari pengunjung meja</p>
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
-          <button 
-            className="btn btn-secondary" 
-            style={{ 
-              padding: '0.45rem 0.8rem', 
-              fontSize: '0.82rem', 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '6px',
-              borderColor: soundEnabled ? 'rgba(16, 185, 129, 0.4)' : ''
-            }} 
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            title={soundEnabled ? "Klik untuk membisukan pengumuman suara" : "Klik untuk mengaktifkan pengumuman suara"}
-          >
-            {soundEnabled ? <Volume2 size={15} color="var(--success)" /> : <VolumeX size={15} color="#f87171" />}
-            {soundEnabled ? 'Speaker Aktif' : 'Speaker Bisu'}
-          </button>
-
-          <button 
-            className="btn btn-secondary" 
-            style={{ padding: '0.45rem 0.8rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }} 
-            onClick={() => announceTableOrder('Meja 3', 'TKT-1003')}
-            title="Klik untuk mendengarkan contoh suara panggilan"
-          >
-            <BellRing size={15} color="var(--primary-color)" /> Uji Suara
-          </button>
-
-          <span 
-            className="status-badge" 
-            style={{ 
-              background: isDbConnected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-              color: isDbConnected ? 'var(--success)' : 'var(--warning)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            <Database size={13} />
-            {isDbConnected ? 'MySQL XAMPP' : 'Mode Offline'}
-          </span>
-
-          <button 
-            className="btn btn-secondary" 
-            style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem' }} 
-            onClick={fetchOrders}
-            title="Refresh Data"
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
-          </button>
-        </div>
-      </div>
-
-      {/* Bar Pencarian Cepat Kode Tiket & Meja */}
-      <div style={{ marginBottom: '1.2rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: 1, maxWidth: '450px' }}>
-          <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input 
-            type="text" 
-            className="form-control" 
-            placeholder="Ketik Kode Tiket (misal: 3714), Nomor Meja, atau Judul..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ paddingLeft: '2.5rem' }}
-          />
-        </div>
-        {searchQuery && (
-          <button 
-            className="btn btn-secondary" 
-            style={{ padding: '0.5rem 0.8rem', fontSize: '0.8rem' }}
-            onClick={() => setSearchQuery('')}
-          >
-            Hapus Pencarian
-          </button>
-        )}
-      </div>
-
-      {/* ========================================================= */}
-      {/* FILTER TABS STATUS (SEMUA, PERLU DIPROSES, SIAP DIAMBIL, SELESAI) */}
-      {/* ========================================================= */}
-      <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '1.8rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-muted)', fontSize: '0.85rem', marginRight: '4px' }}>
-          <Filter size={15} /> Filter:
-        </div>
-
-        <button 
-          className={`btn ${statusFilter === 'all' ? '' : 'btn-secondary'}`}
-          style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-          onClick={() => setStatusFilter('all')}
+      {/* ======================================================== */}
+      {/* SWITCHER MODUL UTAMA STAF (PESANAN BUKU vs BARANG TERTINGGAL) */}
+      {/* ======================================================== */}
+      <div style={{ display: 'flex', gap: '0.8rem', marginBottom: '1.8rem', borderBottom: '1px solid var(--surface-border)', paddingBottom: '1rem', flexWrap: 'wrap' }}>
+        <button
+          className={`btn ${activeModule === 'orders' ? '' : 'btn-secondary'}`}
+          style={{
+            padding: '0.65rem 1.4rem',
+            fontSize: '0.92rem',
+            fontWeight: '700',
+            background: activeModule === 'orders' ? 'var(--primary-color)' : '',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+          onClick={() => setActiveModule('orders')}
         >
-          Semua
-          <span style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(255,255,255,0.18)', fontWeight: '700' }}>
+          <Ticket size={18} /> Antrean Pesanan Buku Meja
+          <span style={{ 
+            background: activeModule === 'orders' ? 'rgba(255,255,255,0.25)' : 'rgba(99,102,241,0.25)', 
+            padding: '2px 8px', 
+            borderRadius: '12px', 
+            fontSize: '0.75rem' 
+          }}>
             {counts.all}
           </span>
         </button>
 
-        <button 
-          className={`btn ${statusFilter === 'in_progress' ? '' : 'btn-secondary'}`}
-          style={{ 
-            padding: '0.45rem 0.9rem', 
-            fontSize: '0.85rem', 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '6px',
-            borderColor: statusFilter === 'in_progress' ? 'var(--warning)' : '',
-            background: statusFilter === 'in_progress' ? 'rgba(245, 158, 11, 0.2)' : ''
+        <button
+          className={`btn ${activeModule === 'lost_found' ? '' : 'btn-secondary'}`}
+          style={{
+            padding: '0.65rem 1.4rem',
+            fontSize: '0.92rem',
+            fontWeight: '700',
+            background: activeModule === 'lost_found' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : '',
+            borderColor: activeModule === 'lost_found' ? '#f59e0b' : '',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: activeModule === 'lost_found' ? '#fff' : ''
           }}
-          onClick={() => setStatusFilter('in_progress')}
+          onClick={() => {
+            setActiveModule('lost_found');
+            fetchLostFound();
+          }}
         >
-          <Clock size={14} color="var(--warning)" /> Perlu Diproses
-          <span style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.35)', color: 'var(--warning)', fontWeight: '700' }}>
-            {counts.in_progress}
+          <Package size={18} /> Kelola Barang Tertinggal & Foto Bukti
+          <span style={{ 
+            background: activeModule === 'lost_found' ? 'rgba(0,0,0,0.3)' : 'rgba(245,158,11,0.25)', 
+            color: activeModule === 'lost_found' ? '#fff' : '#facc15',
+            padding: '2px 8px', 
+            borderRadius: '12px', 
+            fontSize: '0.75rem',
+            fontWeight: '800'
+          }}>
+            {unclaimedLf.length}
           </span>
         </button>
-
-        <button 
-          className={`btn ${statusFilter === 'ready' ? '' : 'btn-secondary'}`}
-          style={{ 
-            padding: '0.45rem 0.9rem', 
-            fontSize: '0.85rem', 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '6px',
-            borderColor: statusFilter === 'ready' ? 'var(--success)' : '',
-            background: statusFilter === 'ready' ? 'rgba(16, 185, 129, 0.2)' : ''
-          }}
-          onClick={() => setStatusFilter('ready')}
-        >
-          <CheckCircle size={14} color="var(--success)" /> Siap Diambil
-          <span style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.35)', color: 'var(--success)', fontWeight: '700' }}>
-            {counts.ready}
-          </span>
-        </button>
-
-        <button 
-          className={`btn ${statusFilter === 'completed' ? '' : 'btn-secondary'}`}
-          style={{ 
-            padding: '0.45rem 0.9rem', 
-            fontSize: '0.85rem', 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '6px',
-            background: statusFilter === 'completed' ? 'rgba(255, 255, 255, 0.15)' : ''
-          }}
-          onClick={() => setStatusFilter('completed')}
-        >
-          <PackageCheck size={14} /> Sudah Selesai
-          <span style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(255,255,255,0.18)', fontWeight: '700' }}>
-            {counts.completed}
-          </span>
-        </button>
-
-        {counts.cancelled > 0 && (
-          <button 
-            className={`btn ${statusFilter === 'cancelled' ? '' : 'btn-secondary'}`}
-            style={{ 
-              padding: '0.45rem 0.9rem', 
-              fontSize: '0.85rem', 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '6px', 
-              color: '#f87171',
-              background: statusFilter === 'cancelled' ? 'rgba(239, 68, 68, 0.2)' : ''
-            }}
-            onClick={() => setStatusFilter('cancelled')}
-          >
-            Dibatalkan
-            <span style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.35)', color: '#f87171', fontWeight: '700' }}>
-              {counts.cancelled}
-            </span>
-          </button>
-        )}
-
-        {(counts.completed > 0 || counts.cancelled > 0) && (
-          <button 
-            className="btn btn-secondary" 
-            style={{ 
-              marginLeft: 'auto',
-              padding: '0.42rem 0.85rem', 
-              fontSize: '0.8rem', 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '6px', 
-              color: '#fca5a5',
-              borderColor: 'rgba(239, 68, 68, 0.35)',
-              background: 'rgba(239, 68, 68, 0.1)'
-            }}
-            onClick={handleCleanupCompleted}
-            title="Hapus semua riwayat pesanan yang sudah selesai atau dibatalkan agar antrean bersih"
-          >
-            <Trash2 size={13} /> Bersihkan Selesai ({counts.completed + counts.cancelled})
-          </button>
-        )}
       </div>
 
-      {/* ========================================================= */}
-      {/* DAFTAR PESANAN SESUAI FILTER */}
-      {/* ========================================================= */}
-      <div className="item-list">
-        {filteredOrders.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '3.5rem 1rem', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.15)', borderRadius: '12px' }}>
-            <p style={{ fontSize: '1.05rem', marginBottom: '0.5rem' }}>
-              {searchQuery 
-                ? `Tidak ditemukan pesanan dengan kata kunci "${searchQuery}"`
-                : statusFilter === 'in_progress'
-                ? '🎉 Luar biasa! Tidak ada antrean pesanan buku yang perlu diproses saat ini.'
-                : statusFilter === 'ready'
-                ? 'Tidak ada buku yang sedang menunggu diambil pengunjung di meja staf.'
-                : statusFilter === 'completed'
-                ? 'Belum ada riwayat pesanan yang selesai hari ini.'
-                : 'Belum ada data pesanan.'}
-            </p>
-            {statusFilter !== 'all' && (
+      {/* ======================================================== */}
+      {/* MODUL 1: PESANAN BUKU MEJA */}
+      {/* ======================================================== */}
+      {activeModule === 'orders' && (
+        <div>
+          <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h1>Dashboard Staf (Verifikasi Tiket)</h1>
+              <p>Kelola dan verifikasi <strong>Kode Tiket</strong> pesanan buku dari pengunjung meja</p>
+            </div>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
               <button 
                 className="btn btn-secondary" 
-                style={{ marginTop: '0.8rem', fontSize: '0.8rem' }}
-                onClick={() => setStatusFilter('all')}
+                style={{ 
+                  padding: '0.45rem 0.8rem', 
+                  fontSize: '0.82rem', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '6px',
+                  borderColor: soundEnabled ? 'rgba(16, 185, 129, 0.4)' : ''
+                }} 
+                onClick={() => setSoundEnabled(!soundEnabled)}
+                title={soundEnabled ? "Klik untuk membisukan pengumuman suara" : "Klik untuk mengaktifkan pengumuman suara"}
               >
-                Lihat Semua Status
+                {soundEnabled ? <Volume2 size={15} color="var(--success)" /> : <VolumeX size={15} color="#f87171" />}
+                {soundEnabled ? 'Speaker Aktif' : 'Speaker Bisu'}
+              </button>
+
+              <button 
+                className="btn btn-secondary" 
+                style={{ padding: '0.45rem 0.8rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }} 
+                onClick={() => announceTableOrder('Meja 3', 'TKT-1003')}
+                title="Klik untuk mendengarkan contoh suara panggilan"
+              >
+                <BellRing size={15} color="var(--primary-color)" /> Uji Suara
+              </button>
+
+              <span 
+                className="status-badge" 
+                style={{ 
+                  background: isDbConnected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                  color: isDbConnected ? 'var(--success)' : 'var(--warning)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Database size={13} />
+                {isDbConnected ? 'MySQL XAMPP' : 'Mode Offline'}
+              </span>
+
+              <button 
+                className="btn btn-secondary" 
+                style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem' }} 
+                onClick={fetchOrders}
+                title="Refresh Data"
+              >
+                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Bar Pencarian Cepat Kode Tiket & Meja */}
+          <div style={{ marginBottom: '1.2rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <div style={{ position: 'relative', flex: 1, maxWidth: '450px' }}>
+              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input 
+                type="text" 
+                className="form-control" 
+                placeholder="Ketik Kode Tiket (misal: 3714), Nomor Meja, atau Judul..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ paddingLeft: '2.5rem' }}
+              />
+            </div>
+            {searchQuery && (
+              <button 
+                className="btn btn-secondary" 
+                style={{ padding: '0.5rem 0.8rem', fontSize: '0.8rem' }}
+                onClick={() => setSearchQuery('')}
+              >
+                Hapus Pencarian
               </button>
             )}
           </div>
-        ) : (
-          filteredOrders.map((order) => (
-            <div 
-              key={order.id} 
-              className="list-item" 
-              style={{ 
-                flexDirection: 'column', 
-                alignItems: 'stretch', 
-                gap: '1rem',
-                borderLeft: order.status === 'ready' 
-                  ? '4px solid var(--success)' 
-                  : order.status === 'searching' || order.status === 'pending'
-                  ? '4px solid var(--warning)' 
-                  : '1px solid var(--surface-border)',
-                background: order.status === 'ready' ? 'rgba(16, 185, 129, 0.05)' : ''
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <div>
-                  {/* Badge Kode Tiket Besar */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem' }}>
-                    <span 
-                      style={{ 
-                        background: 'rgba(99, 102, 241, 0.25)', 
-                        color: '#c7d2fe', 
-                        border: '1px solid var(--primary-color)',
-                        padding: '0.2rem 0.6rem', 
-                        borderRadius: '6px', 
-                        fontFamily: 'monospace', 
-                        fontWeight: '700', 
-                        fontSize: '1rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
+
+          {/* Tab Filter Status */}
+          <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginRight: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Filter size={14} /> Filter:
+              </span>
+
+              {[
+                { key: 'all', label: 'Semua Pesanan', count: counts.all },
+                { key: 'in_progress', label: 'Perlu Diproses', count: counts.in_progress },
+                { key: 'ready', label: 'Siap Diambil', count: counts.ready },
+                { key: 'completed', label: 'Sudah Selesai', count: counts.completed },
+                { key: 'cancelled', label: 'Dibatalkan', count: counts.cancelled },
+              ].map((tab) => {
+                const isActive = statusFilter === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    className={`btn ${isActive ? '' : 'btn-secondary'}`}
+                    style={{
+                      padding: '0.35rem 0.8rem',
+                      fontSize: '0.82rem',
+                      background: isActive ? 'var(--primary-color)' : '',
+                      borderColor: isActive ? 'var(--primary-color)' : '',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                    onClick={() => setStatusFilter(tab.key)}
+                  >
+                    <span>{tab.label}</span>
+                    <span
+                      style={{
+                        background: isActive ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)',
+                        padding: '1px 6px',
+                        borderRadius: '10px',
+                        fontSize: '0.72rem',
+                        fontWeight: '700',
                       }}
                     >
-                      <Ticket size={14} /> {order.ticket_code}
+                      {tab.count}
                     </span>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                      {order.table} • Jam: {order.time}
-                    </span>
-                  </div>
+                  </button>
+                );
+              })}
+            </div>
 
-                  {/* Render Judul Buku (Mendukung Multi-Buku) */}
-                  {order.book.includes(',') ? (
-                    <div style={{ marginTop: '0.4rem' }}>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
-                        Daftar Buku ({order.book.split(',').length} Item):
+            {(counts.completed > 0 || counts.cancelled > 0) && (
+              <button
+                className="btn btn-secondary"
+                style={{
+                  padding: '0.35rem 0.8rem',
+                  fontSize: '0.8rem',
+                  color: '#f87171',
+                  borderColor: 'rgba(239, 68, 68, 0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px'
+                }}
+                onClick={handleCleanupCompleted}
+                title="Bersihkan semua pesanan yang sudah selesai & dibatalkan agar antrean rapi"
+              >
+                <Trash2 size={13} /> Bersihkan Selesai ({counts.completed + counts.cancelled})
+              </button>
+            )}
+          </div>
+
+          {/* Grid Kartu Pesanan Buku */}
+          <div className="orders-grid">
+            {filteredOrders.length === 0 ? (
+              <div style={{ textAlign: 'center', gridColumn: '1 / -1', padding: '3rem 0', color: 'var(--text-muted)' }}>
+                <Ticket size={40} style={{ margin: '0 auto 0.5rem auto', opacity: 0.4 }} />
+                <p>Tidak ada pesanan pada filter saat ini.</p>
+              </div>
+            ) : (
+              filteredOrders.map((order) => (
+                <div 
+                  key={order.id} 
+                  className="order-card"
+                  style={{
+                    border: order.status === 'ready' 
+                      ? '1.5px solid var(--success)' 
+                      : order.status === 'searching'
+                      ? '1px solid var(--primary-color)'
+                      : ''
+                  }}
+                >
+                  <div className="order-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <div className="ticket-code-tag">
+                        <Ticket size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                        {order.ticket_code}
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                        {order.book.split(',').map((b, idx) => (
-                          <div key={idx} style={{ fontSize: '1.05rem', fontWeight: '600', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ color: 'var(--primary-color)', fontSize: '1.2rem' }}>•</span> {b.trim()}
-                          </div>
-                        ))}
+                      <span className="order-table" style={{ marginLeft: '6px' }}>{order.table}</span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {getStatusBadge(order.status)}
+                      <button
+                        onClick={() => handleDeleteOrder(order.id, order.ticket_code)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                          padding: '3px',
+                          borderRadius: '4px',
+                          lineHeight: 1
+                        }}
+                        title={`Hapus pesanan tiket ${order.ticket_code}`}
+                      >
+                        <Trash2 size={14} style={{ color: '#94a3b8' }} />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Daftar Buku */}
+                  <div className="order-body" style={{ margin: '0.8rem 0' }}>
+                    <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.8px', marginBottom: '4px' }}>
+                      Buku yang Dipesan:
+                    </div>
+                    <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.8rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      {order.book.split(',').map((title, idx) => (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: idx !== order.book.split(',').length - 1 ? '6px' : '0' }}>
+                          <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(99,102,241,0.25)', color: '#a5b4fc', fontSize: '0.7rem', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {idx + 1}
+                          </span>
+                          <span style={{ fontSize: '0.95rem', fontWeight: '600', color: 'var(--text-main)' }}>
+                            {title.trim()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="order-footer" style={{ borderTop: '1px solid var(--surface-border)', paddingTop: '0.8rem' }}>
+                    <div className="order-time" style={{ marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Clock size={14} /> Jam pesan: {order.time}
+                    </div>
+
+                    {order.status === 'pending' && (
+                      <button 
+                        className="btn btn-secondary" 
+                        style={{ width: '100%', padding: '0.6rem', color: 'var(--primary-color)', borderColor: 'var(--primary-color)' }}
+                        onClick={() => updateStatus(order.id, 'searching')}
+                      >
+                        <PackageCheck size={18} /> 1. Mulai Mencari Buku di Rak
+                      </button>
+                    )}
+
+                    {order.status === 'searching' && (
+                      <button 
+                        className="btn" 
+                        style={{ width: '100%', padding: '0.6rem', background: 'var(--success)' }}
+                        onClick={() => handleReadyAndAnnounce(order)}
+                      >
+                        <Check size={18} /> 2. Buku Ditemukan & Panggil Suara
+                      </button>
+                    )}
+
+                    {order.status === 'ready' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+                          <button 
+                            className="btn btn-secondary" 
+                            style={{ flex: 1, padding: '0.5rem', fontSize: '0.8rem' }}
+                            onClick={() => announceTableOrder(order.table, order.ticket_code)}
+                            title="Bunyikan ulang pengumuman suara"
+                          >
+                            <Volume2 size={14} /> Panggil Ulang
+                          </button>
+
+                          <button 
+                            className="btn" 
+                            style={{ 
+                              flex: 2, 
+                              padding: '0.6rem', 
+                              background: 'linear-gradient(135deg, #10b981, #059669)',
+                              color: 'white',
+                              fontWeight: '700'
+                            }} 
+                            onClick={() => updateStatus(order.id, 'completed')}
+                          >
+                            <CheckCircle size={18} /> 3. Cocokkan & Serahkan
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {order.status === 'completed' && (
+                      <p style={{ color: 'var(--text-muted)', textAlign: 'center', width: '100%', fontSize: '0.85rem' }}>
+                        ✅ Buku telah diserahkan kepada pemegang tiket <strong>{order.ticket_code}</strong>.
+                      </p>
+                    )}
+
+                    {order.status === 'cancelled' && (
+                      <p style={{ color: 'var(--danger)', textAlign: 'center', width: '100%', fontSize: '0.85rem' }}>
+                        ⚠️ Pesanan ini telah dibatalkan oleh pengunjung.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODUL 2: KELOLA BARANG TERTINGGAL & BUKTI FOTO SERAH TERIMA */}
+      {/* ======================================================== */}
+      {activeModule === 'lost_found' && (
+        <div>
+          {/* Header Modul Lost & Found */}
+          <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div>
+              <h1 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Package size={26} color="#f59e0b" /> Pencatatan Barang Tertinggal
+              </h1>
+              <p>
+                Tulis pengumuman barang yang ditemukan staf di meja belajar, dan <strong>ambil foto orangnya saat serah terima</strong> sebagai bukti sah.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+              <button 
+                className="btn"
+                style={{ 
+                  background: 'linear-gradient(135deg, #f59e0b, #d97706)', 
+                  border: 'none', 
+                  color: '#fff',
+                  fontWeight: '700',
+                  padding: '0.6rem 1.2rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 4px 14px rgba(245, 158, 11, 0.4)'
+                }}
+                onClick={() => setShowCreateModal(true)}
+              >
+                <Plus size={18} /> + Tulis Pengumuman Barang Baru
+              </button>
+
+              <button 
+                className="btn btn-secondary" 
+                style={{ padding: '0.55rem 0.9rem' }}
+                onClick={fetchLostFound}
+                title="Refresh Data"
+              >
+                <RefreshCw size={15} className={loadingLf ? 'animate-spin' : ''} />
+              </button>
+            </div>
+          </div>
+
+          {/* Sub Tab: Belum Diambil vs Sudah Diambil */}
+          <div style={{ display: 'flex', gap: '0.8rem', marginBottom: '1.5rem' }}>
+            <button
+              className={`btn ${lfTab === 'unclaimed' ? '' : 'btn-secondary'}`}
+              style={{
+                background: lfTab === 'unclaimed' ? 'var(--primary-color)' : '',
+                padding: '0.45rem 1.1rem',
+                fontSize: '0.85rem'
+              }}
+              onClick={() => setLfTab('unclaimed')}
+            >
+              🔔 Belum Diambil / Ada di Staf ({unclaimedLf.length})
+            </button>
+
+            <button
+              className={`btn ${lfTab === 'claimed' ? '' : 'btn-secondary'}`}
+              style={{
+                background: lfTab === 'claimed' ? 'var(--primary-color)' : '',
+                padding: '0.45rem 1.1rem',
+                fontSize: '0.85rem'
+              }}
+              onClick={() => setLfTab('claimed')}
+            >
+              ✅ Riwayat Sudah Diserahkan ({claimedLf.length})
+            </button>
+          </div>
+
+          {/* Konten Tab 1: Barang yang Belum Diambil (Tersedia Tombol Foto Bukti) */}
+          {lfTab === 'unclaimed' && (
+            <div>
+              {unclaimedLf.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3rem 1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '12px' }}>
+                  <Package size={40} style={{ color: 'var(--text-muted)', margin: '0 auto 0.6rem auto' }} />
+                  <p style={{ color: 'var(--text-muted)' }}>Tidak ada barang tertinggal yang belum diambil.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.2rem' }}>
+                  {unclaimedLf.map(item => (
+                    <div 
+                      key={item.id}
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(25, 30, 46, 0.95), rgba(18, 22, 36, 0.98))',
+                        border: '1.5px solid rgba(245, 158, 11, 0.35)',
+                        borderRadius: '14px',
+                        padding: '1.2rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        boxShadow: '0 8px 20px rgba(0,0,0,0.25)'
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                          <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#facc15', fontSize: '0.75rem', fontWeight: '700', padding: '2px 8px', borderRadius: '4px' }}>
+                            📍 {item.location}
+                          </span>
+                          <button
+                            onClick={() => handleDeleteLfItem(item.id, item.item_name)}
+                            style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
+                            title="Hapus catatan"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+
+                        <h3 style={{ fontSize: '1.2rem', color: '#fff', marginBottom: '6px' }}>
+                          {item.item_name}
+                        </h3>
+
+                        <p style={{ fontSize: '0.88rem', color: '#cbd5e1', background: 'rgba(0,0,0,0.25)', padding: '0.75rem', borderRadius: '8px', lineHeight: '1.4', marginBottom: '1rem' }}>
+                          {item.description || 'Tidak ada keterangan tambahan.'}
+                        </p>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Clock size={12} /> Ditemukan: {item.report_date ? item.report_date.slice(0, 10) : 'Hari ini'}
+                        </div>
+
+                        {/* Tombol Utama: Serahkan & Ambil Foto Bukti */}
+                        <button
+                          className="btn"
+                          style={{
+                            width: '100%',
+                            background: 'linear-gradient(135deg, #10b981, #059669)',
+                            border: 'none',
+                            color: '#fff',
+                            fontWeight: '700',
+                            padding: '0.65rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)'
+                          }}
+                          onClick={() => {
+                            setHandoverModalItem(item);
+                            setHandoverData({ claimed_by: '', staff_notes: '', proof_photo: null });
+                          }}
+                        >
+                          <Camera size={18} /> 📸 Serahkan & Ambil Foto Bukti
+                        </button>
                       </div>
                     </div>
-                  ) : (
-                    <h3 style={{ fontSize: '1.2rem', color: 'var(--text-main)', marginTop: '2px' }}>
-                      {order.book}
-                    </h3>
-                  )}
+                  ))}
                 </div>
+              )}
+            </div>
+          )}
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {getStatusBadge(order.status)}
-                  <button 
-                    onClick={() => handleDeleteOrder(order.id, order.ticket_code)}
-                    style={{ 
-                      background: 'rgba(239, 68, 68, 0.1)', 
-                      border: '1px solid rgba(239, 68, 68, 0.25)', 
-                      color: '#fca5a5', 
-                      borderRadius: '6px', 
-                      padding: '0.25rem 0.55rem', 
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      fontSize: '0.75rem',
-                      transition: 'all 0.2s ease'
-                    }}
-                    title={`Hapus pesanan tiket ${order.ticket_code}`}
-                  >
-                    <Trash2 size={12} /> Hapus
-                  </button>
+          {/* Konten Tab 2: Riwayat yang Sudah Diserahkan Lengkap dengan Foto Bukti */}
+          {lfTab === 'claimed' && (
+            <div>
+              {claimedLf.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3rem 1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '12px' }}>
+                  <CheckCircle2 size={40} style={{ color: 'var(--text-muted)', margin: '0 auto 0.6rem auto' }} />
+                  <p style={{ color: 'var(--text-muted)' }}>Belum ada barang yang diserahkan.</p>
                 </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.2rem' }}>
+                  {claimedLf.map(item => (
+                    <div 
+                      key={item.id}
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(20, 30, 40, 0.95), rgba(15, 20, 30, 0.98))',
+                        border: '1px solid rgba(16, 185, 129, 0.35)',
+                        borderRadius: '14px',
+                        padding: '1.2rem',
+                        boxShadow: '0 6px 16px rgba(0,0,0,0.2)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                        <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: 'var(--success)', fontSize: '0.75rem', fontWeight: '700', padding: '2px 8px', borderRadius: '4px' }}>
+                          ✓ Sudah Diserahkan
+                        </span>
+                        <button
+                          onClick={() => handleDeleteLfItem(item.id, item.item_name)}
+                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
+                          title="Hapus riwayat"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+
+                      <h3 style={{ fontSize: '1.15rem', color: '#fff', marginBottom: '4px' }}>
+                        {item.item_name}
+                      </h3>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                        📍 {item.location}
+                      </div>
+
+                      <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.8rem', borderRadius: '8px', marginBottom: '0.8rem', fontSize: '0.85rem' }}>
+                        <div style={{ color: 'var(--success)', fontWeight: '700', marginBottom: '2px' }}>
+                          👤 Diterima oleh: {item.claimed_by || 'Pemilik'}
+                        </div>
+                        <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>
+                          🕒 Jam serah terima: {item.claimed_at ? new Date(item.claimed_at).toLocaleString('id-ID') : 'Selesai'}
+                        </div>
+                        {item.staff_notes && (
+                          <div style={{ marginTop: '4px', color: '#cbd5e1', fontSize: '0.78rem', fontStyle: 'italic' }}>
+                            Catatan: "{item.staff_notes}"
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Tombol Lihat Foto Bukti */}
+                      {item.proof_photo ? (
+                        <button
+                          className="btn btn-secondary"
+                          style={{
+                            width: '100%',
+                            fontSize: '0.82rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            borderColor: 'rgba(16, 185, 129, 0.4)',
+                            color: '#a7f3d0'
+                          }}
+                          onClick={() => setViewPhotoItem(item)}
+                        >
+                          <Eye size={15} /> 🔍 Lihat Foto Bukti Serah Terima
+                        </button>
+                      ) : (
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                          (Diserahkan tanpa foto)
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL 1: TULIS PENGUMUMAN BARANG BARU (TEKS SAJA) */}
+      {/* ======================================================== */}
+      {showCreateModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.75)',
+          backdropFilter: 'blur(5px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: 'var(--surface-color)',
+            border: '1.5px solid rgba(245, 158, 11, 0.4)',
+            borderRadius: '16px',
+            padding: '1.8rem',
+            maxWidth: '520px',
+            width: '100%',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.6)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
+              <h2 style={{ fontSize: '1.3rem', color: 'var(--text-main)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Package size={22} color="#f59e0b" /> Catat Barang Tertinggal Baru
+              </h2>
+              <button 
+                onClick={() => setShowCreateModal(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.2rem', lineHeight: '1.4' }}>
+              Masukkan informasi barang dalam <strong>bentuk tulisan teks saja</strong>. Informasi ini akan langsung muncul di halaman web pengunjung agar mereka bisa tahu barangnya tertinggal.
+            </p>
+
+            <form onSubmit={handleCreateNewLf}>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '6px' }}>
+                  Nama Barang (Teks Singkat)
+                </label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  placeholder="Contoh: Cas HP Samsung Type-C Hitam" 
+                  required
+                  value={newLfData.item_name}
+                  onChange={e => setNewLfData({ ...newLfData, item_name: e.target.value })}
+                />
               </div>
 
-              {/* Tombol Aksi Staf */}
-              <div style={{ display: 'flex', gap: '0.6rem', borderTop: '1px solid var(--surface-border)', paddingTop: '0.85rem' }}>
-                {order.status === 'pending' && (
-                  <button className="btn" style={{ flex: 1, padding: '0.55rem' }} onClick={() => updateStatus(order.id, 'searching')}>
-                    <Search size={16} /> 1. Mulai Mencari Buku di Rak
-                  </button>
-                )}
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '6px' }}>
+                  Lokasi Ditemukan
+                </label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  placeholder="Contoh: Meja 4 (Lantai 1) atau Ruang Sastra" 
+                  required
+                  value={newLfData.location}
+                  onChange={e => setNewLfData({ ...newLfData, location: e.target.value })}
+                />
+              </div>
 
-                {order.status === 'searching' && (
-                  <button className="btn" style={{ flex: 1, padding: '0.55rem', background: 'var(--success)' }} onClick={() => handleReadyAndAnnounce(order)}>
-                    <Volume2 size={16} /> 2. Buku Ditemukan & Panggil Suara
-                  </button>
-                )}
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '6px' }}>
+                  Keterangan Tambahan untuk Pengunjung
+                </label>
+                <textarea 
+                  className="form-control" 
+                  rows={3}
+                  placeholder="Contoh: Tertinggal di colokan bawah meja 4 setelah jam baca siang. Barang disimpan aman di meja staf."
+                  value={newLfData.description}
+                  onChange={e => setNewLfData({ ...newLfData, description: e.target.value })}
+                />
+              </div>
 
-                {order.status === 'ready' && (
-                  <div style={{ display: 'flex', gap: '0.6rem', flex: 1, flexWrap: 'wrap' }}>
-                    <button 
-                      className="btn btn-secondary" 
-                      style={{ padding: '0.6rem 1rem', display: 'flex', alignItems: 'center', gap: '6px', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.4)' }}
-                      onClick={() => announceTableOrder(order.table, order.ticket_code)}
-                      title="Bunyikan ulang pengumuman suara jika pengunjung belum datang"
+              <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'flex-end' }}>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary"
+                  onClick={() => setShowCreateModal(false)}
+                >
+                  Batal
+                </button>
+
+                <button 
+                  type="submit" 
+                  className="btn"
+                  style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', border: 'none', color: '#fff', fontWeight: '700' }}
+                >
+                  📢 Publikasikan ke Pengunjung
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL 2: SERAH TERIMA & FOTO BUKTI PEMILIK */}
+      {/* ======================================================== */}
+      {handoverModalItem && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.8)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: 'var(--surface-color)',
+            border: '1.5px solid rgba(16, 185, 129, 0.4)',
+            borderRadius: '16px',
+            padding: '1.8rem',
+            maxWidth: '560px',
+            width: '100%',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.7)',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+              <div>
+                <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--success)', fontWeight: '800' }}>
+                  ✓ SERAH TERIMA BARANG
+                </span>
+                <h2 style={{ fontSize: '1.3rem', color: 'var(--text-main)', marginTop: '2px' }}>
+                  {handoverModalItem.item_name}
+                </h2>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                  Lokasi: {handoverModalItem.location}
+                </p>
+              </div>
+
+              <button 
+                onClick={() => {
+                  stopCamera();
+                  setHandoverModalItem(null);
+                }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Input Nama Pengambil */}
+            <div className="form-group" style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px' }}>
+                👤 Nama Orang yang Mengambil (Wajib):
+              </label>
+              <input 
+                type="text" 
+                className="form-control" 
+                placeholder="Contoh: Ahmad Faisal (Pengunjung Meja 4)" 
+                required
+                value={handoverData.claimed_by}
+                onChange={e => setHandoverData({ ...handoverData, claimed_by: e.target.value })}
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '1.2rem' }}>
+              <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                Catatan Verifikasi Staf (Opsional):
+              </label>
+              <input 
+                type="text" 
+                className="form-control" 
+                placeholder="Contoh: Sudah dicocokkan dengan tipe HP & kartu tanda mahasiswa miliknya" 
+                value={handoverData.staff_notes}
+                onChange={e => setHandoverData({ ...handoverData, staff_notes: e.target.value })}
+                style={{ fontSize: '0.85rem' }}
+              />
+            </div>
+
+            {/* AREA FOTO BUKTI SERAH TERIMA */}
+            <div style={{ background: 'rgba(0,0,0,0.3)', border: '1.5px dashed rgba(255,255,255,0.15)', borderRadius: '12px', padding: '1.2rem', textAlign: 'center', marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '0.88rem', fontWeight: '700', color: '#e2e8f0', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <Camera size={18} color="var(--primary-color)" /> Foto Barang Bukti Serah Terima
+              </div>
+
+              {/* Tampilan Preview Foto yang Berhasil Diambil */}
+              {handoverData.proof_photo ? (
+                <div>
+                  <img 
+                    src={handoverData.proof_photo} 
+                    alt="Bukti Foto" 
+                    style={{ maxWidth: '100%', maxHeight: '220px', borderRadius: '10px', objectFit: 'contain', border: '2px solid var(--success)', marginBottom: '0.8rem' }} 
+                  />
+                  <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}
+                      onClick={() => setHandoverData(prev => ({ ...prev, proof_photo: null }))}
                     >
-                      <Volume2 size={16} /> Panggil Ulang
-                    </button>
-                    <button 
-                      className="btn" 
-                      style={{ 
-                        flex: 1, 
-                        padding: '0.6rem', 
-                        background: 'linear-gradient(135deg, #10b981, #059669)',
-                        color: 'white',
-                        fontWeight: '700'
-                      }} 
-                      onClick={() => updateStatus(order.id, 'completed')}
-                    >
-                      <CheckCircle size={18} /> 3. Cocokkan Tiket & Serahkan Buku
+                      🔄 Foto Ulang
                     </button>
                   </div>
-                )}
-
-                {order.status === 'completed' && (
-                  <p style={{ color: 'var(--text-muted)', textAlign: 'center', width: '100%', fontSize: '0.85rem' }}>
-                    ✅ Buku telah diserahkan kepada pemegang tiket <strong>{order.ticket_code}</strong>.
+                </div>
+              ) : isCameraActive ? (
+                /* Tampilan Video Stream Kamera Live */
+                <div>
+                  <video 
+                    ref={videoRef} 
+                    playsInline 
+                    muted 
+                    style={{ width: '100%', maxHeight: '240px', background: '#000', borderRadius: '10px', objectFit: 'cover', marginBottom: '0.8rem' }} 
+                  />
+                  <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center' }}>
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ background: 'var(--success)', padding: '0.5rem 1.2rem', fontSize: '0.85rem' }}
+                      onClick={capturePhoto}
+                    >
+                      📸 Jepret Foto Sekarang
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '0.5rem 0.9rem', fontSize: '0.85rem' }}
+                      onClick={stopCamera}
+                    >
+                      Tutup Kamera
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Pilihan Buka Kamera atau Upload File */
+                <div>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                    Foto orang yang mengambil barang sebagai arsip bukti sah bahwa barang sudah diserahkan:
                   </p>
-                )}
 
-                {order.status === 'cancelled' && (
-                  <p style={{ color: 'var(--danger)', textAlign: 'center', width: '100%', fontSize: '0.85rem' }}>
-                    ⚠️ Pesanan ini telah dibatalkan oleh pengunjung.
-                  </p>
-                )}
-              </div>
+                  <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ background: 'var(--primary-color)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      onClick={startCamera}
+                    >
+                      <Camera size={16} /> Buka Kamera (Jepret Langsung)
+                    </button>
+
+                    <label 
+                      className="btn btn-secondary" 
+                      style={{ fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <Upload size={16} /> Pilih dari Galeri / File
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        capture="user" 
+                        onChange={handleFileUpload} 
+                        style={{ display: 'none' }} 
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
-          ))
-        )}
-      </div>
+
+            {/* Tombol Simpan Serah Terima */}
+            <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'flex-end' }}>
+              <button 
+                type="button" 
+                className="btn btn-secondary"
+                onClick={() => {
+                  stopCamera();
+                  setHandoverModalItem(null);
+                }}
+              >
+                Batal
+              </button>
+
+              <button 
+                type="button" 
+                className="btn"
+                style={{ background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', color: '#fff', fontWeight: '700', padding: '0.65rem 1.4rem' }}
+                onClick={handleSaveHandover}
+              >
+                ✓ Simpan Serah Terima & Foto Bukti
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL 3: LIHAT FOTO BUKTI SERAH TERIMA */}
+      {/* ======================================================== */}
+      {viewPhotoItem && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.85)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: 'var(--surface-color)',
+            border: '1px solid rgba(16, 185, 129, 0.4)',
+            borderRadius: '16px',
+            padding: '1.5rem',
+            maxWidth: '520px',
+            width: '100%',
+            textAlign: 'center'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <div style={{ textAlign: 'left' }}>
+                <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Bukti Serah Terima Barang</h3>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Barang: <strong>{viewPhotoItem.item_name}</strong> ({viewPhotoItem.location})
+                </p>
+              </div>
+              <button 
+                onClick={() => setViewPhotoItem(null)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ background: '#000', borderRadius: '12px', overflow: 'hidden', marginBottom: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <img 
+                src={viewPhotoItem.proof_photo} 
+                alt="Foto Bukti Orang Pengambil" 
+                style={{ maxWidth: '100%', maxHeight: '350px', objectFit: 'contain', display: 'block', margin: '0 auto' }} 
+              />
+            </div>
+
+            <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.8rem', borderRadius: '8px', fontSize: '0.85rem', textAlign: 'left', marginBottom: '1rem' }}>
+              <div>👤 <strong>Diterima oleh:</strong> {viewPhotoItem.claimed_by || 'Pemilik Sah'}</div>
+              <div>🕒 <strong>Waktu Serah Terima:</strong> {viewPhotoItem.claimed_at ? new Date(viewPhotoItem.claimed_at).toLocaleString('id-ID') : '-'}</div>
+              {viewPhotoItem.staff_notes && (
+                <div style={{ marginTop: '4px', color: '#cbd5e1' }}>📝 <strong>Catatan Staf:</strong> {viewPhotoItem.staff_notes}</div>
+              )}
+            </div>
+
+            <button 
+              className="btn btn-secondary"
+              style={{ width: '100%', justifyContent: 'center' }}
+              onClick={() => setViewPhotoItem(null)}
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
