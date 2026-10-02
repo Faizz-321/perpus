@@ -109,10 +109,19 @@ function LostFound() {
       locationRef.current?.focus();
       return;
     }
-    if (!formData.contact.trim()) {
-      showAlert('Nomor telepon / WhatsApp wajib diisi agar staf perpustakaan dapat menghubungi Anda saat barang ditemukan!', {
+    const cleanPhone = formData.contact.replace(/[^0-9]/g, '');
+    if (!cleanPhone) {
+      showAlert('Nomor telepon / WhatsApp wajib diisi (hanya angka) agar staf perpustakaan dapat menghubungi Anda!', {
         type: 'warning',
         title: 'Nomor Telepon Wajib Diisi'
+      });
+      contactRef.current?.focus();
+      return;
+    }
+    if (cleanPhone.length < 9) {
+      showAlert('Nomor telepon harus berupa angka yang valid (minimal 9 digit angka, contoh: 081234567890)!', {
+        type: 'warning',
+        title: 'Nomor Telepon Kurang Lengkap'
       });
       contactRef.current?.focus();
       return;
@@ -503,12 +512,32 @@ function LostFound() {
                 </label>
                 <input 
                   ref={contactRef}
-                  type="tel" 
+                  type="text" 
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={15}
                   className="form-control" 
-                  placeholder="Contoh: 081234567890 (Wajib Diisi)" 
+                  placeholder="Contoh: 081234567890 (Hanya angka)" 
                   required
                   value={formData.contact}
-                  onChange={e => setFormData({ ...formData, contact: e.target.value })}
+                  onKeyDown={e => {
+                    // Izinkan tombol kontrol dan navigasi keyboard
+                    if (
+                      ['Backspace', 'Tab', 'Enter', 'Delete', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) ||
+                      (e.ctrlKey || e.metaKey)
+                    ) {
+                      return;
+                    }
+                    // Cegah huruf dan simbol apapun selain angka 0-9
+                    if (!/^[0-9]$/.test(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
+                  onChange={e => {
+                    // Hanya simpan angka 0-9, bersihkan huruf/simbol jika di-paste
+                    const onlyDigits = e.target.value.replace(/[^0-9]/g, '');
+                    setFormData({ ...formData, contact: onlyDigits });
+                  }}
                 />
               </div>
 
