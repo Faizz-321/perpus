@@ -35,7 +35,7 @@ function QRSystem() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeOrder, setActiveOrder] = useState(null);
 
-  // State untuk Fitur Rating Bintang
+  // State untuk Fitur Rating Bintang & Modal Ulasan
   const [ratedBooks, setRatedBooks] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('bibliotech_rated_books')) || {};
@@ -43,7 +43,6 @@ function QRSystem() {
       return {};
     }
   });
-  const [hoverRating, setHoverRating] = useState({});
   const [rateModalBook, setRateModalBook] = useState(null);
   const [modalRating, setModalRating] = useState(5);
   const [modalHoverRating, setModalHoverRating] = useState(0);
@@ -182,9 +181,9 @@ function QRSystem() {
 
   // Fungsi toggle pilih buku (Maksimal 3 buku)
   const toggleBook = (book) => {
-    const isAlreadySelected = selectedBooks.some(b => b.id === book.id);
+    const isAlreadySelected = selectedBooks.some(b => b.id === book.id || b.title === book.title);
     if (isAlreadySelected) {
-      setSelectedBooks(selectedBooks.filter(b => b.id !== book.id));
+      setSelectedBooks(selectedBooks.filter(b => b.id !== book.id && b.title !== book.title));
     } else {
       if (selectedBooks.length >= 3) {
         alert('⚠️ Maksimal 3 buku sekaligus per pesanan agar staf tidak kesulitan membawanya.');
@@ -192,6 +191,15 @@ function QRSystem() {
       }
       setSelectedBooks([...selectedBooks, book]);
     }
+  };
+
+  // Buka Modal Penilaian untuk buku tertentu
+  const openRateModalForBook = (book) => {
+    setRateModalBook(book);
+    setModalRating(ratedBooks[book.title] || 5);
+    setModalHoverRating(0);
+    setModalReview('');
+    setRatingSuccessMsg('');
   };
 
   // Kirim pesanan ke database (multi-buku)
@@ -284,49 +292,34 @@ function QRSystem() {
     setStep(1);
   };
 
-  // Handler Beri Rating pada buku pesanan (setelah selesai membaca di Step 4)
-  const handleRateOrderBook = async (bookTitleWithShelf, ratingVal) => {
-    // Bersihkan nama buku dari tag rak [Rak X]
-    const cleanTitle = bookTitleWithShelf.replace(/\[.*?\]/g, '').trim();
-    try {
-      const res = await fetch('http://localhost:5000/api/books/rate-by-title', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: cleanTitle,
-          rating: ratingVal,
-          table_no: activeOrder?.table_no || 'Meja Pengunjung'
-        })
-      });
-
-      const data = await res.json();
-      const newRated = { ...ratedBooks, [cleanTitle]: ratingVal };
-      setRatedBooks(newRated);
-      localStorage.setItem('bibliotech_rated_books', JSON.stringify(newRated));
-
-      // Perbarui state buku lokal jika ada data terupdate
-      if (data.book) {
-        setBooks(prev => prev.map(b => b.id === data.book.id ? { ...b, ...data.book } : b));
-      }
-    } catch (err) {
-      console.error('Gagal mengirim rating:', err);
-    }
-  };
-
-  // Handler Beri Rating via modal katalog buku
+  // Handler Kirim Rating dari Modal Popup (baik dari katalog maupun tiket selesai)
   const handleRateModalSubmit = async () => {
     if (!rateModalBook) return;
     setIsSubmittingRating(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/books/${rateModalBook.id}/rate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rating: modalRating,
-          review_text: modalReview,
-          table_no: tableNo || 'Pengunjung Kios'
-        })
-      });
+      let res;
+      if (rateModalBook.id) {
+        res = await fetch(`http://localhost:5000/api/books/${rateModalBook.id}/rate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rating: modalRating,
+            review_text: modalReview,
+            table_no: activeOrder?.table_no || tableNo || 'Pengunjung Kios'
+          })
+        });
+      } else {
+        res = await fetch('http://localhost:5000/api/books/rate-by-title', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: rateModalBook.title,
+            rating: modalRating,
+            review_text: modalReview,
+            table_no: activeOrder?.table_no || tableNo || 'Pengunjung Kios'
+          })
+        });
+      }
 
       const data = await res.json();
       const newRated = { ...ratedBooks, [rateModalBook.title]: modalRating };
@@ -336,7 +329,8 @@ function QRSystem() {
       if (data.book) {
         setBooks(prev => prev.map(b => b.id === data.book.id ? { ...b, ...data.book } : b));
       }
-      setRatingSuccessMsg(`⭐ Terima kasih! Rating ${modalRating} bintang untuk "${rateModalBook.title}" berhasil dicatat.`);
+
+      setRatingSuccessMsg(`⭐ Terima kasih! Penilaian ${modalRating} bintang untuk "${rateModalBook.title}" berhasil dicatat.`);
       setTimeout(() => {
         setRateModalBook(null);
         setRatingSuccessMsg('');
@@ -503,7 +497,7 @@ function QRSystem() {
             /* ========================================================= */
             <div className="book-list">
               {paginatedBooks.map((book) => {
-                const isSelected = selectedBooks.some(b => b.id === book.id);
+                const isSelected = selectedBooks.some(b => b.id === book.id || b.title === book.title);
                 const theme = getThemeForBook(book.id, book.title);
                 const isFavorite = (parseFloat(book.rating) >= 4.8 && (book.read_count >= 15 || book.rating_count >= 10));
 
@@ -511,29 +505,55 @@ function QRSystem() {
                   <div 
                     key={book.id} 
                     className={`book-item ${isSelected ? 'selected' : ''}`}
-                    onClick={() => toggleBook(book)}
-                    title={`Klik untuk ${isSelected ? 'batal memilih' : 'memilih'} buku ini`}
+                    onClick={() => openRateModalForBook(book)}
+                    style={{ cursor: 'pointer', position: 'relative' }}
+                    title="Tekan buku untuk melihat ulasan & memberi rating bintang"
                   >
-                    {/* Badge Checklist Terpilih */}
-                    {isSelected && (
-                      <div style={{ 
-                        position: 'absolute', 
-                        top: '12px', 
-                        right: '12px', 
-                        width: '28px', 
-                        height: '28px', 
-                        background: 'var(--primary-color)', 
-                        borderRadius: '50%', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        color: 'white',
-                        boxShadow: '0 0 12px var(--primary-glow)',
-                        zIndex: 3
-                      }}>
-                        <Check size={16} strokeWidth={3} />
-                      </div>
-                    )}
+                    {/* Tombol Checklist/Pilih Pinjam Cepat di Pojok Kanan Atas */}
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleBook(book);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        top: '10px',
+                        right: '10px',
+                        zIndex: 4,
+                        cursor: 'pointer'
+                      }}
+                      title={isSelected ? "Batalkan pilihan pinjam" : "Pilih buku ini untuk dipinjam"}
+                    >
+                      {isSelected ? (
+                        <div style={{ 
+                          width: '28px', 
+                          height: '28px', 
+                          background: 'var(--primary-color)', 
+                          borderRadius: '50%', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center', 
+                          color: 'white',
+                          boxShadow: '0 0 12px var(--primary-glow)'
+                        }}>
+                          <Check size={16} strokeWidth={3} />
+                        </div>
+                      ) : (
+                        <div style={{
+                          background: 'rgba(0, 0, 0, 0.65)',
+                          border: '1px solid rgba(255, 255, 255, 0.25)',
+                          color: '#e2e8f0',
+                          borderRadius: '14px',
+                          padding: '3px 8px',
+                          fontSize: '0.7rem',
+                          fontWeight: '700',
+                          backdropFilter: 'blur(4px)',
+                          transition: 'all 0.2s ease'
+                        }}>
+                          + Pilih
+                        </div>
+                      )}
+                    </div>
 
                     {/* Badge Favorit Pembaca (Jika Rating Tinggi) */}
                     {isFavorite && !isSelected && (
@@ -605,15 +625,8 @@ function QRSystem() {
                           <MapPin size={11} /> {book.shelf_location ? book.shelf_location.replace('Lemari 3, ', '') : 'Rak 1'}
                         </span>
 
-                        {/* Indikator Bintang Rating Interaktif */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setRateModalBook(book);
-                            setModalRating(5);
-                            setModalReview('');
-                          }}
+                        {/* Indikator Bintang Rating */}
+                        <div
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -624,17 +637,14 @@ function QRSystem() {
                             padding: '2px 7px',
                             borderRadius: '12px',
                             border: '1px solid rgba(250, 204, 21, 0.28)',
-                            fontSize: '0.72rem',
-                            cursor: 'pointer',
-                            transition: 'transform 0.15s ease'
+                            fontSize: '0.72rem'
                           }}
-                          title="Klik untuk melihat ulasan atau beri rating bintang"
                         >
                           <Star size={11} fill="#facc15" strokeWidth={0} /> {parseFloat(book.rating || 4.5).toFixed(1)}
                           <span style={{ color: 'var(--text-muted)', fontWeight: '400', fontSize: '0.66rem' }}>
                             ({book.read_count || 10}x)
                           </span>
-                        </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -734,7 +744,7 @@ function QRSystem() {
       )}
 
       {/* ========================================================= */}
-      {/* TAMPILAN TIKET PENGAMBILAN DIGITAL & RATING SETELAH DIBACA */}
+      {/* TAMPILAN TIKET PENGAMBILAN DIGITAL (RINGKAS & TANPA SCROLL) */}
       {/* ========================================================= */}
       {step === 2 && activeOrder && (
         <div style={{ padding: '1rem 0' }}>
@@ -770,28 +780,90 @@ function QRSystem() {
 
               {/* Isi Tiket */}
               <div className="ticket-body">
-                <div style={{ background: 'rgba(0,0,0,0.25)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', marginBottom: '1.5rem' }}>
-                  <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '1px', marginBottom: '8px' }}>
-                    Daftar Buku yang Dipesan:
+                {/* Daftar Buku yang Dipesan dengan Tombol Rating Cepat Langsung di Kartu */}
+                <div style={{ background: 'rgba(0,0,0,0.25)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', marginBottom: '1.2rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '1px' }}>
+                      Daftar Buku yang Dipesan:
+                    </div>
+                    {activeOrder.status === 'completed' && (
+                      <span style={{ fontSize: '0.75rem', color: '#facc15', fontWeight: '600' }}>
+                        *Tekan buku untuk beri rating
+                      </span>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {activeOrder.book_title.split(',').map((title, idx) => (
-                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'rgba(99,102,241,0.25)', color: '#a5b4fc', fontSize: '0.75rem', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          {idx + 1}
-                        </span>
-                        <span style={{ fontSize: '1.05rem', fontWeight: '600', color: 'var(--text-main)' }}>
-                          {title.trim()}
-                        </span>
-                      </div>
-                    ))}
+                    {activeOrder.book_title.split(',').map((titleWithShelf, idx) => {
+                      const cleanT = titleWithShelf.replace(/\[.*?\]/g, '').trim();
+                      const isRated = ratedBooks[cleanT];
+                      const foundBook = books.find(b => b.title.toLowerCase().trim() === cleanT.toLowerCase().trim()) || {
+                        id: null,
+                        title: cleanT,
+                        author: 'Koleksi Perpustakaan',
+                        shelf_location: titleWithShelf.includes('[') ? titleWithShelf.match(/\[(.*?)\]/)?.[1] || 'Lemari 3' : 'Lemari 3'
+                      };
+
+                      return (
+                        <div 
+                          key={idx} 
+                          onClick={() => {
+                            // Tekan buku untuk langsung memunculkan modal penilaian (tanpa scroll ke bawah)
+                            openRateModalForBook(foundBook);
+                          }}
+                          style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'space-between',
+                            padding: '8px 12px',
+                            background: isRated ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+                            border: isRated ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(250, 204, 21, 0.25)',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                          }}
+                          title="Tekan buku untuk beri bintang penilaian"
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'rgba(99,102,241,0.25)', color: '#a5b4fc', fontSize: '0.75rem', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              {idx + 1}
+                            </span>
+                            <span style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-main)' }}>
+                              {cleanT}
+                            </span>
+                          </div>
+
+                          <div>
+                            {isRated ? (
+                              <span style={{ color: 'var(--success)', fontSize: '0.8rem', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <CheckCircle2 size={14} /> {isRated} ⭐
+                              </span>
+                            ) : (
+                              <span style={{ 
+                                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                                color: '#ffffff',
+                                padding: '3px 9px',
+                                borderRadius: '20px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                boxShadow: '0 2px 8px rgba(245, 158, 11, 0.35)'
+                              }}>
+                                <Star size={11} fill="#ffffff" strokeWidth={0} /> Beri Rating
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* Status Realtime Banner */}
                 {activeOrder.status === 'ready' ? (
-                  <div className="pulse-ready" style={{ background: 'rgba(16, 185, 129, 0.25)', border: '1.5px solid var(--success)', borderRadius: '12px', padding: '1rem', textAlign: 'center', marginBottom: '1.5rem' }}>
+                  <div className="pulse-ready" style={{ background: 'rgba(16, 185, 129, 0.25)', border: '1.5px solid var(--success)', borderRadius: '12px', padding: '1rem', textAlign: 'center', marginBottom: '1.2rem' }}>
                     <div style={{ color: 'var(--success)', fontWeight: '700', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                       <CheckCircle2 size={24} /> BUKU SUDAH SIAP DIAMBIL!
                     </div>
@@ -819,7 +891,7 @@ function QRSystem() {
                     </button>
                   </div>
                 ) : activeOrder.status === 'searching' ? (
-                  <div style={{ background: 'rgba(99, 102, 241, 0.2)', border: '1px solid var(--primary-color)', borderRadius: '12px', padding: '1rem', textAlign: 'center', marginBottom: '1.5rem' }}>
+                  <div style={{ background: 'rgba(99, 102, 241, 0.2)', border: '1px solid var(--primary-color)', borderRadius: '12px', padding: '1rem', textAlign: 'center', marginBottom: '1.2rem' }}>
                     <div style={{ color: '#a5b4fc', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                       <Search size={18} className="animate-spin" /> Staf Sedang Mengambil Buku di Rak...
                     </div>
@@ -828,114 +900,16 @@ function QRSystem() {
                     </p>
                   </div>
                 ) : activeOrder.status === 'completed' ? (
-                  <div>
-                    {/* Banner Selesai */}
-                    <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '12px', padding: '1.2rem', textAlign: 'center', marginBottom: '1.2rem' }}>
-                      <div style={{ color: 'var(--success)', fontWeight: '700', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                        <CheckCircle2 size={22} /> Buku Telah Diterima!
-                      </div>
-                      <p style={{ fontSize: '0.85rem', marginTop: '4px', color: 'var(--text-muted)' }}>
-                        Pesanan selesai. Selamat membaca! Setelah selesai membaca buku, silakan berikan rating bintang di bawah ini.
-                      </p>
+                  <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '12px', padding: '1rem', textAlign: 'center', marginBottom: '1.2rem' }}>
+                    <div style={{ color: 'var(--success)', fontWeight: '700', fontSize: '1.05rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <CheckCircle2 size={20} /> Buku Telah Diterima!
                     </div>
-
-                    {/* ========================================================= */}
-                    {/* WIDGET RATING BUKU SETELAH SELESAI MEMBACA */}
-                    {/* ========================================================= */}
-                    <div style={{ 
-                      background: 'linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.95))', 
-                      border: '1.5px solid rgba(245, 158, 11, 0.35)', 
-                      borderRadius: '14px', 
-                      padding: '1.2rem', 
-                      textAlign: 'left',
-                      marginBottom: '1.5rem',
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.3)'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.4rem' }}>
-                        <Star size={20} fill="#facc15" color="#facc15" />
-                        <h3 style={{ margin: 0, fontSize: '1.05rem', color: '#fef08a' }}>
-                          Sudah Selesai Membaca? Berikan Rating Bintang!
-                        </h3>
-                      </div>
-                      <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                        Bantu pengunjung lain menemukan buku terbaik yang sering dibaca dengan memberikan penilaian Anda:
-                      </p>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        {activeOrder.book_title.split(',').map((title, idx) => {
-                          const cleanT = title.replace(/\[.*?\]/g, '').trim();
-                          const isRated = ratedBooks[cleanT];
-                          const currentHover = hoverRating[cleanT] || 0;
-
-                          return (
-                            <div key={idx} style={{ 
-                              background: 'rgba(255,255,255,0.03)', 
-                              border: '1px solid rgba(255,255,255,0.08)', 
-                              borderRadius: '10px', 
-                              padding: '0.8rem 1rem',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '6px'
-                            }}>
-                              <div style={{ fontWeight: '600', fontSize: '0.95rem', color: '#f1f5f9' }}>
-                                📖 {cleanT}
-                              </div>
-
-                              {isRated ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--success)', fontSize: '0.85rem' }}>
-                                  <CheckCircle2 size={16} /> 
-                                  <span>Terima kasih! Anda memberi <strong>{isRated} bintang</strong> ⭐ untuk buku ini.</span>
-                                </div>
-                              ) : (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                                  <div style={{ display: 'flex', gap: '4px' }}>
-                                    {[1, 2, 3, 4, 5].map((starVal) => {
-                                      const isLit = starVal <= (currentHover || 0);
-                                      return (
-                                        <button
-                                          key={starVal}
-                                          type="button"
-                                          onMouseEnter={() => setHoverRating(prev => ({ ...prev, [cleanT]: starVal }))}
-                                          onMouseLeave={() => setHoverRating(prev => ({ ...prev, [cleanT]: 0 }))}
-                                          onClick={() => handleRateOrderBook(title, starVal)}
-                                          style={{
-                                            background: 'none',
-                                            border: 'none',
-                                            cursor: 'pointer',
-                                            padding: '2px',
-                                            transition: 'transform 0.15s ease'
-                                          }}
-                                          title={`${starVal} Bintang`}
-                                        >
-                                          <Star 
-                                            size={26} 
-                                            fill={isLit ? '#facc15' : 'transparent'} 
-                                            color={isLit ? '#facc15' : '#64748b'} 
-                                            style={{ transform: isLit ? 'scale(1.2)' : 'scale(1)', transition: 'all 0.15s ease' }}
-                                          />
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-
-                                  <span style={{ fontSize: '0.78rem', color: currentHover ? '#facc15' : 'var(--text-muted)', fontWeight: currentHover ? '600' : '400' }}>
-                                    {currentHover === 1 && '⭐ Kurang menarik'}
-                                    {currentHover === 2 && '⭐⭐ Biasa saja'}
-                                    {currentHover === 3 && '⭐⭐⭐ Cukup bagus'}
-                                    {currentHover === 4 && '⭐⭐⭐⭐ Sangat bagus'}
-                                    {currentHover === 5 && '⭐⭐⭐⭐⭐ Luar biasa (Favorit)!'}
-                                    {!currentHover && '(Klik 1 - 5 bintang)'}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <p style={{ fontSize: '0.82rem', marginTop: '4px', color: '#e2e8f0' }}>
+                      Selamat membaca! Tekan judul buku di atas kapan saja untuk memberikan bintang ulasan Anda.
+                    </p>
                   </div>
                 ) : (
-                  <div style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)', borderRadius: '12px', padding: '1rem', textAlign: 'center', marginBottom: '1.5rem' }}>
+                  <div style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)', borderRadius: '12px', padding: '1rem', textAlign: 'center', marginBottom: '1.2rem' }}>
                     <div style={{ color: 'var(--warning)', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                       <Clock size={18} /> Menunggu Staf Memproses
                     </div>
@@ -945,7 +919,7 @@ function QRSystem() {
                   </div>
                 )}
 
-                {/* Timeline Stepper Status */}
+                {/* Timeline Stepper Status Ringkas */}
                 <div className="ticket-timeline">
                   <div className={`timeline-step ${currentStepIdx >= 1 ? (currentStepIdx > 1 ? 'completed' : 'active') : ''}`}>
                     <div className="timeline-dot">1</div>
@@ -965,12 +939,12 @@ function QRSystem() {
                   </div>
                 </div>
 
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'flex-start', gap: '8px', background: 'rgba(0,0,0,0.15)', padding: '0.75rem', borderRadius: '8px' }}>
-                  <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px', color: 'var(--primary-color)' }} />
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.15)', padding: '0.6rem 0.8rem', borderRadius: '8px' }}>
+                  <AlertCircle size={16} style={{ flexShrink: 0, color: 'var(--primary-color)' }} />
                   <span>
                     {activeOrder.status === 'completed' 
-                      ? 'Pesanan ini sudah selesai dan diarsipkan. Anda dapat memesan buku baru.'
-                      : `Layar ini terkunci pada tiket ${activeOrder.ticket_code} agar antrean buku Anda tidak terganggu.`}
+                      ? 'Pesanan telah selesai. Anda dapat memberikan rating bintang atau memesan buku baru.'
+                      : `Layar terkunci pada tiket ${activeOrder.ticket_code} agar antrean buku Anda tidak terganggu.`}
                   </span>
                 </div>
               </div>
@@ -978,12 +952,12 @@ function QRSystem() {
           </div>
 
           {/* Area Tombol Navigasi Bawah */}
-          <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
+          <div style={{ textAlign: 'center', marginTop: '1.2rem' }}>
             {activeOrder.status === 'completed' && (
               <button 
                 className="btn" 
                 onClick={handleOrderNewBooks}
-                style={{ padding: '0.85rem 2.2rem', fontSize: '1rem', background: 'var(--primary-color)', boxShadow: '0 0 20px var(--primary-glow)' }}
+                style={{ padding: '0.75rem 2rem', fontSize: '0.95rem', background: 'var(--primary-color)', boxShadow: '0 0 20px var(--primary-glow)' }}
               >
                 <Plus size={18} /> Pesan Buku Baru
               </button>
@@ -1014,7 +988,7 @@ function QRSystem() {
       )}
 
       {/* ========================================================= */}
-      {/* MODAL CEPAT BERI RATING & ULASAN DARI KATALOG */}
+      {/* MODAL PENILAIAN BUKU PEMBACA (GAMBAR YANG DIKIRIM USER) */}
       {/* ========================================================= */}
       {rateModalBook && (
         <div style={{
@@ -1029,14 +1003,15 @@ function QRSystem() {
           padding: '1rem'
         }}>
           <div style={{
-            background: 'var(--surface-color)',
+            background: 'var(--surface-color, #131722)',
             border: '1.5px solid rgba(250, 204, 21, 0.35)',
             borderRadius: '16px',
             padding: '1.8rem',
             maxWidth: '460px',
             width: '100%',
             boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
-            textAlign: 'center'
+            textAlign: 'center',
+            position: 'relative'
           }}>
             {ratingSuccessMsg ? (
               <div style={{ padding: '1.5rem 0' }}>
@@ -1046,32 +1021,76 @@ function QRSystem() {
               </div>
             ) : (
               <div>
+                {/* Header Modal persis seperti screenshot user */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.2rem' }}>
                   <div style={{ textAlign: 'left' }}>
-                    <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '1px', color: '#facc15', fontWeight: '800' }}>
-                      ★ Penilaian Buku Pembaca
+                    <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '1px', color: '#facc15', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      ★ PENILAIAN BUKU PEMBACA
                     </span>
-                    <h2 style={{ fontSize: '1.25rem', marginTop: '4px', color: 'var(--text-main)' }}>
+                    <h2 style={{ fontSize: '1.35rem', marginTop: '4px', color: 'var(--text-main, #ffffff)', fontWeight: '700' }}>
                       {rateModalBook.title}
                     </h2>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      ✍️ {rateModalBook.author} • {rateModalBook.shelf_location}
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted, #94a3b8)', marginTop: '2px' }}>
+                      ✍️ {rateModalBook.author} • {rateModalBook.shelf_location || 'Lemari 3'}
                     </p>
                   </div>
                   <button 
                     onClick={() => setRateModalBook(null)}
-                    style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem' }}
+                    style={{ background: 'none', border: 'none', color: 'var(--text-muted, #94a3b8)', cursor: 'pointer', fontSize: '1.4rem', padding: '4px', lineHeight: 1 }}
+                    title="Tutup"
                   >
                     ✕
                   </button>
                 </div>
 
+                {/* Tombol Opsi Pinjam Jika Dibuka dari Katalog Pengunjung */}
+                {step === 1 && (
+                  <div style={{ marginBottom: '1.2rem', textAlign: 'center' }}>
+                    {selectedBooks.some(b => b.id === rateModalBook.id || b.title === rateModalBook.title) ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleBook(rateModalBook)}
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid #ef4444',
+                          color: '#fca5a5',
+                          padding: '0.45rem 1rem',
+                          borderRadius: '20px',
+                          fontSize: '0.8rem',
+                          fontWeight: '600',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        ✓ Buku ini ada di Keranjang Pinjam (Klik untuk Batal)
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => toggleBook(rateModalBook)}
+                        style={{
+                          background: 'rgba(99, 102, 241, 0.2)',
+                          border: '1px solid var(--primary-color)',
+                          color: '#c7d2fe',
+                          padding: '0.45rem 1.1rem',
+                          borderRadius: '20px',
+                          fontSize: '0.8rem',
+                          fontWeight: '600',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        + Pilih Buku Ini untuk Dipinjam ke Meja
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Kontainer Bintang Interaktif */}
                 <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1.2rem', borderRadius: '12px', marginBottom: '1.2rem', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.8rem' }}>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted, #94a3b8)', marginBottom: '0.8rem' }}>
                     Berikan bintang penilaian Anda untuk buku ini:
                   </div>
 
-                  {/* Bintang Interaktif 1-5 */}
+                  {/* 5 Bintang Kuning Emas Besar */}
                   <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '0.6rem' }}>
                     {[1, 2, 3, 4, 5].map((star) => {
                       const isFilled = star <= (modalHoverRating || modalRating);
@@ -1083,9 +1102,10 @@ function QRSystem() {
                           onMouseLeave={() => setModalHoverRating(0)}
                           onClick={() => setModalRating(star)}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+                          title={`${star} Bintang`}
                         >
                           <Star 
-                            size={32} 
+                            size={34} 
                             fill={isFilled ? '#facc15' : 'transparent'} 
                             color={isFilled ? '#facc15' : '#64748b'} 
                             style={{ transform: isFilled ? 'scale(1.2)' : 'scale(1)', transition: 'all 0.15s ease' }}
@@ -1095,7 +1115,8 @@ function QRSystem() {
                     })}
                   </div>
 
-                  <div style={{ fontSize: '0.85rem', color: '#facc15', fontWeight: '700' }}>
+                  {/* Label Bintang seperti di gambar */}
+                  <div style={{ fontSize: '0.88rem', color: '#facc15', fontWeight: '700' }}>
                     {(modalHoverRating || modalRating) === 1 && '⭐ Kurang Menarik'}
                     {(modalHoverRating || modalRating) === 2 && '⭐⭐ Cukup / Biasa Saja'}
                     {(modalHoverRating || modalRating) === 3 && '⭐⭐⭐ Cukup Bagus'}
@@ -1104,8 +1125,9 @@ function QRSystem() {
                   </div>
                 </div>
 
+                {/* Form Ulasan Singkat */}
                 <div style={{ marginBottom: '1.4rem', textAlign: 'left' }}>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted, #94a3b8)', marginBottom: '6px' }}>
                     Ulasan singkat (Opsional):
                   </label>
                   <input
@@ -1114,15 +1136,17 @@ function QRSystem() {
                     placeholder="Contoh: Novelnya penuh inspirasi dan bikin penasaran sampai akhir..."
                     value={modalReview}
                     onChange={(e) => setModalReview(e.target.value)}
-                    style={{ fontSize: '0.88rem' }}
+                    style={{ fontSize: '0.88rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)' }}
                   />
                 </div>
 
+                {/* Tombol Aksi Bawah */}
                 <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'flex-end' }}>
                   <button
                     className="btn btn-secondary"
                     onClick={() => setRateModalBook(null)}
                     disabled={isSubmittingRating}
+                    style={{ padding: '0.55rem 1.2rem', fontSize: '0.9rem' }}
                   >
                     Batal
                   </button>
@@ -1130,7 +1154,7 @@ function QRSystem() {
                     className="btn"
                     onClick={handleRateModalSubmit}
                     disabled={isSubmittingRating}
-                    style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', border: 'none', color: '#fff', fontWeight: '700' }}
+                    style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', border: 'none', color: '#fff', fontWeight: '700', padding: '0.55rem 1.4rem', fontSize: '0.9rem' }}
                   >
                     {isSubmittingRating ? <Loader2 size={16} className="animate-spin" /> : 'Kirim Penilaian'}
                   </button>
