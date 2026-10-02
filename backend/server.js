@@ -375,6 +375,10 @@ app.post('/api/lost-found', (req, res) => {
     return res.status(400).json({ error: 'Nama barang dan lokasi wajib diisi' });
   }
 
+  if (type === 'lost' && (!contact || !contact.trim())) {
+    return res.status(400).json({ error: 'Nomor telepon / kontak wajib diisi agar staf bisa menghubungi Anda saat barang ditemukan' });
+  }
+
   const query = 'INSERT INTO lost_found (item_name, type, location, description, report_date, status, contact) VALUES (?, ?, ?, ?, CURDATE(), "unclaimed", ?)';
   pool.query(query, [item_name, type || 'found', location, description || '', contact || null], (err, result) => {
     if (err) {

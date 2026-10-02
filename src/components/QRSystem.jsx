@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Send, Loader2, Ticket, CheckCircle2, Clock, Search, BookOpen, AlertCircle, XCircle, Plus, Check, ChevronLeft, ChevronRight, Bookmark, MapPin, Volume2, Star, Flame, Sparkles, MessageSquare } from 'lucide-react';
 import { announceTableOrder } from '../utils/soundAnnouncement';
+import { useModal } from '../context/ModalContext';
 
 // Palet warna sampul buku realistis yang elegan
 const COVER_THEMES = [
@@ -20,6 +21,7 @@ function getThemeForBook(id, title) {
 }
 
 function QRSystem() {
+  const { showAlert, showConfirm } = useModal();
   const [step, setStep] = useState(1);
   const [tableNo, setTableNo] = useState('');
   
@@ -186,7 +188,10 @@ function QRSystem() {
       setSelectedBooks(selectedBooks.filter(b => b.id !== book.id && b.title !== book.title));
     } else {
       if (selectedBooks.length >= 3) {
-        alert('⚠️ Maksimal 3 buku sekaligus per pesanan agar staf tidak kesulitan membawanya.');
+        showAlert('Maksimal 3 buku sekaligus per pesanan agar staf tidak kesulitan membawanya.', {
+          type: 'warning',
+          title: 'Batas Peminjaman'
+        });
         return;
       }
       setSelectedBooks([...selectedBooks, book]);
@@ -206,12 +211,18 @@ function QRSystem() {
   const handleSubmitOrder = async (e) => {
     e.preventDefault();
     if (!tableNo) {
-      alert('Silakan pilih nomor meja Anda terlebih dahulu!');
+      showAlert('Silakan pilih nomor meja Anda terlebih dahulu!', {
+        type: 'warning',
+        title: 'Pilih Nomor Meja'
+      });
       return;
     }
 
     if (selectedBooks.length === 0) {
-      alert('Pilih minimal 1 buku yang ingin dipinjam.');
+      showAlert('Pilih minimal 1 buku yang ingin dipinjam.', {
+        type: 'warning',
+        title: 'Pilih Buku'
+      });
       return;
     }
 
@@ -268,7 +279,13 @@ function QRSystem() {
 
   // Batalkan pesanan (hanya bisa saat status masih 'pending')
   const handleCancelOrder = async () => {
-    if (!window.confirm('Apakah Anda yakin ingin membatalkan pesanan tiket ini?')) return;
+    const confirmed = await showConfirm('Apakah Anda yakin ingin membatalkan pesanan tiket ini?', {
+      title: 'Batalkan Pesanan',
+      confirmText: 'Ya, Batalkan',
+      cancelText: 'Kembali',
+      type: 'danger'
+    });
+    if (!confirmed) return;
 
     try {
       await fetch(`http://localhost:5000/api/orders/${activeOrder.id}`, {

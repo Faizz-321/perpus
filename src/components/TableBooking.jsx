@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { CalendarClock } from 'lucide-react';
+import { useModal } from '../context/ModalContext';
 
 function TableBooking() {
+  const { showAlert } = useModal();
   const [selectedTable, setSelectedTable] = useState(null);
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('11:00');
@@ -36,7 +38,10 @@ function TableBooking() {
       console.warn('Backend offline / booking saved locally:', err.message);
     }
 
-    alert(`Berhasil memesan ${selectedTable.number} (${startTime} - ${endTime})! Data tersimpan di sistem.`);
+    showAlert(`Berhasil memesan ${selectedTable.number} (${startTime} - ${endTime})! Data tersimpan di sistem.`, {
+      type: 'success',
+      title: 'Reservasi Meja Berhasil'
+    });
     setSelectedTable(null);
   };
 

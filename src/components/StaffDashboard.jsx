@@ -5,8 +5,10 @@ import {
   AlertCircle, Plus, User, CheckCircle2, Phone, MapPin, MessageCircle 
 } from 'lucide-react';
 import { announceTableOrder } from '../utils/soundAnnouncement';
+import { useModal } from '../context/ModalContext';
 
 function StaffDashboard() {
+  const { showAlert, showConfirm } = useModal();
   // Modul Aktif: 'orders' (Pesanan Buku Meja) atau 'lost_found' (Barang Tertinggal)
   const [activeModule, setActiveModule] = useState('orders');
 
@@ -138,7 +140,14 @@ function StaffDashboard() {
   };
 
   const handleDeleteOrder = async (id, ticketCode) => {
-    if (!window.confirm(`Hapus pesanan tiket ${ticketCode} dari sistem perpustakaan?`)) return;
+    const confirmed = await showConfirm(`Hapus pesanan tiket ${ticketCode} dari sistem perpustakaan?`, {
+      title: 'Hapus Pesanan',
+      confirmText: 'Ya, Hapus',
+      cancelText: 'Batal',
+      type: 'danger'
+    });
+    if (!confirmed) return;
+
     setOrders((prev) => prev.filter((order) => order.id !== id));
     try {
       await fetch(`http://localhost:5000/api/orders/${id}`, { method: 'DELETE' });
@@ -150,10 +159,21 @@ function StaffDashboard() {
   const handleCleanupCompleted = async () => {
     const totalToClean = counts.completed + counts.cancelled;
     if (totalToClean === 0) {
-      alert('Tidak ada riwayat pesanan selesai atau dibatalkan untuk dibersihkan.');
+      showAlert('Tidak ada riwayat pesanan selesai atau dibatalkan untuk dibersihkan.', {
+        type: 'info',
+        title: 'Riwayat Bersih'
+      });
       return;
     }
-    if (!window.confirm(`Bersihkan ${totalToClean} riwayat pesanan yang sudah Selesai & Dibatalkan agar antrean bersih?`)) return;
+
+    const confirmed = await showConfirm(`Bersihkan ${totalToClean} riwayat pesanan yang sudah Selesai & Dibatalkan agar antrean bersih?`, {
+      title: 'Bersihkan Riwayat Pesanan',
+      confirmText: 'Ya, Bersihkan',
+      cancelText: 'Batal',
+      type: 'warning'
+    });
+    if (!confirmed) return;
+
     setOrders((prev) => prev.filter((o) => o.status !== 'completed' && o.status !== 'cancelled'));
     try {
       await fetch('http://localhost:5000/api/orders/cleanup/completed', { method: 'DELETE' });
@@ -168,7 +188,10 @@ function StaffDashboard() {
   const handleCreateAnnouncement = async (e) => {
     e.preventDefault();
     if (!newLfData.item_name || !newLfData.location) {
-      alert('Nama barang dan lokasi wajib diisi!');
+      showAlert('Nama barang dan lokasi wajib diisi!', {
+        type: 'warning',
+        title: 'Data Belum Lengkap'
+      });
       return;
     }
 
@@ -187,16 +210,25 @@ function StaffDashboard() {
       const data = await res.json().catch(() => ({}));
 
       if (res.ok) {
-        alert('📢 Pengumuman barang tertinggal berhasil dipublikasikan ke sisi pengunjung!');
+        showAlert('Pengumuman barang tertinggal berhasil dipublikasikan ke sisi pengunjung!', {
+          type: 'success',
+          title: 'Berhasil Dipublikasikan'
+        });
         setShowCreateModal(false);
         setNewLfData({ item_name: '', location: '', description: '' });
         fetchLostFound();
       } else {
-        alert('Gagal menambah barang: ' + (data.error || 'Terjadi kesalahan pada server'));
+        showAlert('Gagal menambah barang: ' + (data.error || 'Terjadi kesalahan pada server'), {
+          type: 'danger',
+          title: 'Gagal Menyimpan'
+        });
       }
     } catch (err) {
       console.error('Error saat menambah barang tertinggal:', err);
-      alert('Gagal terhubung ke server backend! Pastikan backend aktif.');
+      showAlert('Gagal terhubung ke server backend! Pastikan backend aktif.', {
+        type: 'danger',
+        title: 'Koneksi Gagal'
+      });
     }
   };
 
@@ -216,7 +248,10 @@ function StaffDashboard() {
       }
     } catch (err) {
       console.warn('Gagal akses webcam:', err);
-      alert('Tidak dapat mengakses kamera secara langsung. Silakan gunakan tombol "Pilih dari Galeri / File Foto" di bawah.');
+      showAlert('Tidak dapat mengakses kamera secara langsung. Silakan gunakan tombol "Pilih dari Galeri / File Foto" di bawah.', {
+        type: 'warning',
+        title: 'Kamera Tidak Tersedia'
+      });
       setIsCameraActive(false);
     }
   };
@@ -253,7 +288,10 @@ function StaffDashboard() {
 
   const handleSaveHandover = async () => {
     if (!handoverData.claimed_by.trim()) {
-      alert('Silakan isi Nama Orang yang Mengambil barang.');
+      showAlert('Silakan isi Nama Orang yang Mengambil barang.', {
+        type: 'warning',
+        title: 'Nama Penerima Wajib Diisi'
+      });
       return;
     }
 
@@ -269,7 +307,10 @@ function StaffDashboard() {
       });
 
       if (res.ok) {
-        alert('✓ Barang berhasil diserahkan ke pemilik dan foto bukti serah terima telah tersimpan!');
+        showAlert('Barang berhasil diserahkan ke pemilik dan foto bukti serah terima telah tersimpan!', {
+          type: 'success',
+          title: 'Serah Terima Berhasil'
+        });
         stopCamera();
         setHandoverModalItem(null);
         setHandoverData({ claimed_by: '', staff_notes: '', proof_photo: null });
@@ -281,7 +322,14 @@ function StaffDashboard() {
   };
 
   const handleDeleteLfItem = async (id, name) => {
-    if (!window.confirm(`Hapus catatan barang "${name}" dari arsip sistem?`)) return;
+    const confirmed = await showConfirm(`Hapus catatan barang "${name}" dari arsip sistem?`, {
+      title: 'Hapus Catatan Barang',
+      confirmText: 'Ya, Hapus',
+      cancelText: 'Batal',
+      type: 'danger'
+    });
+    if (!confirmed) return;
+
     try {
       await fetch(`http://localhost:5000/api/lost-found/${id}`, { method: 'DELETE' });
       fetchLostFound();

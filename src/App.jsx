@@ -5,6 +5,7 @@ import QRSystem from './components/QRSystem';
 import StaffDashboard from './components/StaffDashboard';
 import LostFound from './components/LostFound';
 import TableBooking from './components/TableBooking';
+import { ModalProvider } from './context/ModalContext';
 
 function Nav() {
   const location = useLocation();
@@ -41,20 +42,22 @@ function Nav() {
 
 function App() {
   return (
-    <Router>
-      <div className="app-container">
-        <Nav />
-        <main>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/qr-system" element={<QRSystem />} />
-            <Route path="/staff" element={<StaffDashboard />} />
-            <Route path="/lost-found" element={<LostFound />} />
-            <Route path="/booking" element={<TableBooking />} />
-          </Routes>
-        </main>
-      </div>
-    </Router>
+    <ModalProvider>
+      <Router>
+        <div className="app-container">
+          <Nav />
+          <main>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/qr-system" element={<QRSystem />} />
+              <Route path="/staff" element={<StaffDashboard />} />
+              <Route path="/lost-found" element={<LostFound />} />
+              <Route path="/booking" element={<TableBooking />} />
+            </Routes>
+          </main>
+        </div>
+      </Router>
+    </ModalProvider>
   );
 }
 

@@ -1,11 +1,19 @@
-import { useState, useEffect } from 'react';
-import { Package, Search, Plus, CheckCircle2, Clock, MapPin, AlertCircle, ArrowRight, ShieldCheck, Check, Sparkles } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Package, Search, Plus, CheckCircle2, Clock, MapPin, AlertCircle, ArrowRight, ShieldCheck, Check, Sparkles, Phone } from 'lucide-react';
+import { useModal } from '../context/ModalContext';
 
 function LostFound() {
+  const { showAlert } = useModal();
   const [activeTab, setActiveTab] = useState('found'); // 'found' (tersedia di staf), 'claimed' (sudah diambil), 'report' (lapor kehilangan)
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Refs untuk navigasi otomatis tombol Enter ke bawah
+  const itemNameRef = useRef(null);
+  const locationRef = useRef(null);
+  const descriptionRef = useRef(null);
+  const contactRef = useRef(null);
 
   // Form lapor kehilangan dari pengunjung
   const [formData, setFormData] = useState({
@@ -70,12 +78,48 @@ function LostFound() {
     return () => clearInterval(interval);
   }, []);
 
+  // Navigasi otomatis tombol Enter ke kolom bawahnya
+  const handleEnterKeyDown = (e, nextRef) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (nextRef && nextRef.current) {
+        nextRef.current.focus();
+      }
+    }
+  };
+
+  const handleTextareaEnter = (e, nextRef) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (nextRef && nextRef.current) {
+        nextRef.current.focus();
+      }
+    }
+  };
+
   const handleSubmitReport = async (e) => {
     e.preventDefault();
-    if (!formData.item_name || !formData.location) return;
+    if (!formData.item_name.trim()) {
+      showAlert('Nama atau jenis barang wajib diisi!', { type: 'warning', title: 'Data Belum Lengkap' });
+      itemNameRef.current?.focus();
+      return;
+    }
+    if (!formData.location.trim()) {
+      showAlert('Lokasi terakhir Anda berada wajib diisi!', { type: 'warning', title: 'Data Belum Lengkap' });
+      locationRef.current?.focus();
+      return;
+    }
+    if (!formData.contact.trim()) {
+      showAlert('Nomor telepon / WhatsApp wajib diisi agar staf perpustakaan dapat menghubungi Anda saat barang ditemukan!', {
+        type: 'warning',
+        title: 'Nomor Telepon Wajib Diisi'
+      });
+      contactRef.current?.focus();
+      return;
+    }
 
     try {
-      await fetch('http://localhost:5000/api/lost-found', {
+      const res = await fetch('http://localhost:5000/api/lost-found', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -86,13 +130,27 @@ function LostFound() {
           contact: formData.contact
         })
       });
-      fetchItems();
+
+      if (res.ok) {
+        showAlert('Laporan kehilangan Anda berhasil dikirim ke staf perpustakaan!', {
+          type: 'success',
+          title: 'Laporan Terkirim'
+        });
+        setIsSubmitted(true);
+        setFormData({ item_name: '', location: '', description: '', contact: '' });
+        fetchItems();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        showAlert(errData.error || 'Gagal mengirim laporan. Silakan coba lagi.', {
+          type: 'danger',
+          title: 'Gagal Mengirim'
+        });
+      }
     } catch (e) {
       console.warn('Gagal simpan laporan:', e.message);
+      setIsSubmitted(true);
+      setFormData({ item_name: '', location: '', description: '', contact: '' });
     }
-
-    setIsSubmitted(true);
-    setFormData({ item_name: '', location: '', description: '', contact: '' });
   };
 
   // Filter barang temuan yang belum diambil
@@ -384,55 +442,71 @@ function LostFound() {
                 </p>
               </div>
 
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
+              <div className="form-group" style={{ marginBottom: '1.1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '6px' }}>
-                  Nama / Jenis Barang
+                  Nama / Jenis Barang <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input 
+                  ref={itemNameRef}
                   type="text" 
                   className="form-control" 
                   placeholder="Contoh: Cas HP Samsung Type-C Hitam, Flashdisk Kingston, dll." 
                   required
                   value={formData.item_name}
                   onChange={e => setFormData({ ...formData, item_name: e.target.value })}
+                  onKeyDown={e => handleEnterKeyDown(e, locationRef)}
                 />
               </div>
 
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
+              <div className="form-group" style={{ marginBottom: '1.1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '6px' }}>
-                  Lokasi Terakhir Anda Berada
+                  Lokasi Terakhir Anda Berada <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input 
+                  ref={locationRef}
                   type="text" 
                   className="form-control" 
                   placeholder="Contoh: Meja 4 (Lantai 1) atau Ruang Baca Sastra" 
                   required
                   value={formData.location}
                   onChange={e => setFormData({ ...formData, location: e.target.value })}
+                  onKeyDown={e => handleEnterKeyDown(e, descriptionRef)}
                 />
               </div>
 
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
+              <div className="form-group" style={{ marginBottom: '1.1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '6px' }}>
                   Ciri-ciri Khusus (Teks Tambahan)
                 </label>
                 <textarea 
+                  ref={descriptionRef}
                   className="form-control" 
                   rows={3}
                   placeholder="Contoh: Kabelnya ada isolasi putih sedikit, di cas ada stiker kecil..."
                   value={formData.description}
                   onChange={e => setFormData({ ...formData, description: e.target.value })}
+                  onKeyDown={e => handleTextareaEnter(e, contactRef)}
                 />
+                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                  Tekan <strong>Enter</strong> untuk pindah ke kolom nomor telepon di bawahnya, atau <strong>Shift + Enter</strong> untuk baris baru.
+                </span>
               </div>
 
               <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '6px' }}>
-                  Nomor WhatsApp / Kontak Anda (Agar Staf Bisa Hubungi)
+                <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', fontWeight: '600', marginBottom: '6px' }}>
+                  <span>
+                    Nomor WhatsApp / Kontak Anda <span style={{ color: '#ef4444' }}>* (Wajib Diisi)</span>
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: '700' }}>
+                    ● Agar staf bisa langsung mengabari
+                  </span>
                 </label>
                 <input 
-                  type="text" 
+                  ref={contactRef}
+                  type="tel" 
                   className="form-control" 
-                  placeholder="Contoh: 081234567890" 
+                  placeholder="Contoh: 081234567890 (Wajib Diisi)" 
+                  required
                   value={formData.contact}
                   onChange={e => setFormData({ ...formData, contact: e.target.value })}
                 />
