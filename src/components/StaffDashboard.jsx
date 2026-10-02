@@ -166,7 +166,10 @@ function StaffDashboard() {
   // --------------------------------------------------------
   const handleCreateAnnouncement = async (e) => {
     e.preventDefault();
-    if (!newLfData.item_name || !newLfData.location) return;
+    if (!newLfData.item_name || !newLfData.location) {
+      alert('Nama barang dan lokasi wajib diisi!');
+      return;
+    }
 
     try {
       const res = await fetch('http://localhost:5000/api/lost-found', {
@@ -179,16 +182,24 @@ function StaffDashboard() {
           type: 'found'
         })
       });
+
+      const data = await res.json().catch(() => ({}));
+
       if (res.ok) {
         alert('📢 Pengumuman barang tertinggal berhasil dipublikasikan ke sisi pengunjung!');
         setShowCreateModal(false);
         setNewLfData({ item_name: '', location: '', description: '' });
         fetchLostFound();
+      } else {
+        alert('Gagal menambah barang: ' + (data.error || 'Terjadi kesalahan pada server'));
       }
     } catch (err) {
-      console.error(err);
+      console.error('Error saat menambah barang tertinggal:', err);
+      alert('Gagal terhubung ke server backend! Pastikan backend aktif.');
     }
   };
+
+  const handleCreateNewLf = handleCreateAnnouncement;
 
   // Kamera Control
   const startCamera = async () => {
@@ -956,7 +967,7 @@ function StaffDashboard() {
               Masukkan informasi barang dalam <strong>bentuk tulisan teks saja</strong>. Informasi ini akan langsung muncul di halaman web pengunjung agar mereka bisa tahu barangnya tertinggal.
             </p>
 
-            <form onSubmit={handleCreateNewLf}>
+            <form onSubmit={handleCreateAnnouncement}>
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '6px' }}>
                   Nama Barang (Teks Singkat)

@@ -111,6 +111,6 @@ INSERT INTO `table_bookings` (`table_number`, `booking_date`, `start_time`, `end
 
 -- Data Awal Lost & Found
 INSERT INTO `lost_found` (`item_name`, `type`, `location`, `report_date`, `contact`, `status`) VALUES
-('Payung Biru Lipat', 'found', 'Ruang Baca A', CURDATE(), 'Staf Meja Depan', 'open'),
-('Mouse Wireless Logitech', 'lost', 'Lab Komputer', CURDATE(), '081234567890', 'open'),
+('Payung Biru Lipat', 'found', 'Ruang Baca A', CURDATE(), 'Staf Meja Depan', 'unclaimed'),
+('Mouse Wireless Logitech', 'lost', 'Lab Komputer', CURDATE(), '081234567890', 'unclaimed'),
 ('Kartu Tanda Mahasiswa', 'found', 'Pintu Masuk Utama', CURDATE(), 'Satpam Lobby', 'claimed');
