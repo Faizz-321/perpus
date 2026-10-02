@@ -458,21 +458,17 @@ function QRSystem() {
                         {book.author}
                       </div>
 
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', marginTop: '6px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                         <span style={{ 
                           background: 'rgba(255,255,255,0.06)', 
-                          padding: '2px 6px', 
+                          padding: '2px 8px', 
                           borderRadius: '4px', 
                           color: '#cbd5e1',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '3px'
+                          gap: '4px'
                         }}>
-                          <MapPin size={10} /> {book.shelf_location ? book.shelf_location.replace('Lemari 3, ', '') : 'Rak 1'}
-                        </span>
-                        
-                        <span style={{ color: 'var(--success)' }}>
-                          ● Stok: {book.stock || 1}
+                          <MapPin size={11} /> {book.shelf_location ? book.shelf_location.replace('Lemari 3, ', '') : 'Rak 1'}
                         </span>
                       </div>
                     </div>
