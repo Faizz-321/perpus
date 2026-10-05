@@ -5,7 +5,7 @@ function Home() {
   const navigate = useNavigate();
 
   return (
-    <div className="glass-panel" style={{ textAlign: 'center', padding: '4rem 2rem' }}>
+    <div className="glass-panel home-hero-panel">
       <div className="page-header">
         <h1>Selamat Datang di Perpustakaan Umum Kota Parepare</h1>
         <p>Sistem layanan perpustakaan pintar & pemesanan buku meja</p>

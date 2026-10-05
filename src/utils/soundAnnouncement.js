@@ -53,7 +53,7 @@ export function playChime() {
 export function speakIndonesian(text) {
   return new Promise((resolve) => {
     // 1. Coba putar audio asli Bahasa Indonesia dari endpoint backend
-    const audioUrl = `http://localhost:5000/api/tts?text=${encodeURIComponent(text)}`;
+    const audioUrl = `/api/tts?text=${encodeURIComponent(text)}`;
     const audio = new Audio(audioUrl);
 
     audio.onended = () => resolve();

@@ -25,7 +25,7 @@ function TableBooking() {
     if (!selectedTable) return;
 
     try {
-      await fetch('http://localhost:5000/api/table-bookings', {
+      await fetch('/api/table-bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

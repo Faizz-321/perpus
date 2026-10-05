@@ -48,7 +48,7 @@ function StaffDashboard() {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/orders');
+      const response = await fetch('/api/orders');
       if (!response.ok) throw new Error('Gagal mengambil data dari server');
       const data = await response.json();
       
@@ -89,7 +89,7 @@ function StaffDashboard() {
   const fetchLostFound = async () => {
     setLoadingLf(true);
     try {
-      const res = await fetch('http://localhost:5000/api/lost-found');
+      const res = await fetch('/api/lost-found');
       if (res.ok) {
         const data = await res.json();
         setLfItems(data);
@@ -122,7 +122,7 @@ function StaffDashboard() {
     );
 
     try {
-      await fetch(`http://localhost:5000/api/orders/${id}`, {
+      await fetch(`/api/orders/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
@@ -150,7 +150,7 @@ function StaffDashboard() {
 
     setOrders((prev) => prev.filter((order) => order.id !== id));
     try {
-      await fetch(`http://localhost:5000/api/orders/${id}`, { method: 'DELETE' });
+      await fetch(`/api/orders/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.error('Gagal menghapus pesanan:', err);
     }
@@ -176,7 +176,7 @@ function StaffDashboard() {
 
     setOrders((prev) => prev.filter((o) => o.status !== 'completed' && o.status !== 'cancelled'));
     try {
-      await fetch('http://localhost:5000/api/orders/cleanup/completed', { method: 'DELETE' });
+      await fetch('/api/orders/cleanup/completed', { method: 'DELETE' });
     } catch (err) {
       console.error('Gagal membersihkan riwayat pesanan:', err);
     }
@@ -196,7 +196,7 @@ function StaffDashboard() {
     }
 
     try {
-      const res = await fetch('http://localhost:5000/api/lost-found', {
+      const res = await fetch('/api/lost-found', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -296,7 +296,7 @@ function StaffDashboard() {
     }
 
     try {
-      const res = await fetch(`http://localhost:5000/api/lost-found/${handoverModalItem.id}/handover`, {
+      const res = await fetch(`/api/lost-found/${handoverModalItem.id}/handover`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -331,7 +331,7 @@ function StaffDashboard() {
     if (!confirmed) return;
 
     try {
-      await fetch(`http://localhost:5000/api/lost-found/${id}`, { method: 'DELETE' });
+      await fetch(`/api/lost-found/${id}`, { method: 'DELETE' });
       fetchLostFound();
     } catch (err) {
       console.error(err);

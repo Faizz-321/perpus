@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { BookOpen, Library, Search, CalendarClock, Users, Package } from 'lucide-react';
+import { BookOpen, Users, Package, Home as HomeIcon } from 'lucide-react';
 import Home from './components/Home';
 import QRSystem from './components/QRSystem';
 import StaffDashboard from './components/StaffDashboard';
@@ -12,13 +12,13 @@ function Nav() {
   
   return (
     <header className="app-header">
-      <Link to="/" className="logo-area" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', textDecoration: 'none' }}>
+      <Link to="/" className="logo-area">
         <img 
           src="/Lambang.png" 
           alt="Lambang Kota Parepare" 
-          style={{ width: '46px', height: '46px', objectFit: 'contain', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.4))' }} 
+          className="logo-img"
         />
-        <span style={{ fontSize: '1.25rem', fontWeight: '700', letterSpacing: '-0.3px', color: 'var(--text-main)' }}>
+        <span className="logo-title">
           Perpustakaan Umum Kota Parepare
         </span>
       </Link>
@@ -40,6 +40,31 @@ function Nav() {
   );
 }
 
+function MobileBottomNav() {
+  const location = useLocation();
+
+  return (
+    <nav className="mobile-bottom-nav">
+      <Link to="/" className={`mobile-nav-item ${location.pathname === '/' ? 'active' : ''}`}>
+        <HomeIcon size={20} />
+        <span>Beranda</span>
+      </Link>
+      <Link to="/qr-system" className={`mobile-nav-item ${location.pathname === '/qr-system' ? 'active' : ''}`}>
+        <BookOpen size={20} />
+        <span>Pinjam Buku</span>
+      </Link>
+      <Link to="/lost-found" className={`mobile-nav-item ${location.pathname === '/lost-found' ? 'active' : ''}`}>
+        <Package size={20} />
+        <span>Barang Hilang</span>
+      </Link>
+      <Link to="/staff" className={`mobile-nav-item ${location.pathname === '/staff' ? 'active' : ''}`}>
+        <Users size={20} />
+        <span>Staf</span>
+      </Link>
+    </nav>
+  );
+}
+
 function App() {
   return (
     <ModalProvider>
@@ -55,6 +80,7 @@ function App() {
               <Route path="/booking" element={<TableBooking />} />
             </Routes>
           </main>
+          <MobileBottomNav />
         </div>
       </Router>
     </ModalProvider>

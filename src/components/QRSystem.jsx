@@ -84,7 +84,7 @@ function QRSystem() {
   // Ambil 260+ buku inventaris dari database MySQL
   useEffect(() => {
     setLoadingBooks(true);
-    fetch('http://localhost:5000/api/books')
+    fetch('/api/books')
       .then((res) => {
         if (!res.ok) throw new Error('Gagal mengambil katalog');
         return res.json();
@@ -108,7 +108,7 @@ function QRSystem() {
 
     const checkStatus = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/orders/${activeOrder.id}`);
+        const res = await fetch(`/api/orders/${activeOrder.id}`);
         if (res.ok) {
           const data = await res.json();
           setActiveOrder((prev) => ({
@@ -234,7 +234,7 @@ function QRSystem() {
     }).join(', ');
 
     try {
-      const res = await fetch('http://localhost:5000/api/orders', {
+      const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -288,7 +288,7 @@ function QRSystem() {
     if (!confirmed) return;
 
     try {
-      await fetch(`http://localhost:5000/api/orders/${activeOrder.id}`, {
+      await fetch(`/api/orders/${activeOrder.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'cancelled' }),
@@ -316,7 +316,7 @@ function QRSystem() {
     try {
       let res;
       if (rateModalBook.id) {
-        res = await fetch(`http://localhost:5000/api/books/${rateModalBook.id}/rate`, {
+        res = await fetch(`/api/books/${rateModalBook.id}/rate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -326,7 +326,7 @@ function QRSystem() {
           })
         });
       } else {
-        res = await fetch('http://localhost:5000/api/books/rate-by-title', {
+        res = await fetch('/api/books/rate-by-title', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -422,7 +422,7 @@ function QRSystem() {
             </div>
 
             {/* Tombol Tab Filter Rak & Koleksi Terfavorit */}
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div className="filter-shelf-container" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
               <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginRight: '4px' }}>
                 <MapPin size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> Filter:
               </span>
@@ -528,6 +528,7 @@ function QRSystem() {
                   >
                     {/* Tombol Checklist/Pilih Pinjam Cepat di Pojok Kanan Atas */}
                     <div
+                      className="book-select-badge"
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleBook(book);
@@ -574,23 +575,25 @@ function QRSystem() {
 
                     {/* Badge Favorit Pembaca (Jika Rating Tinggi) */}
                     {isFavorite && !isSelected && (
-                      <div style={{ 
-                        position: 'absolute', 
-                        top: '10px', 
-                        left: '10px', 
-                        background: 'linear-gradient(135deg, #f59e0b, #d97706)', 
-                        color: '#ffffff', 
-                        padding: '2px 7px', 
-                        borderRadius: '6px', 
-                        fontSize: '0.62rem', 
-                        fontWeight: '800', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '3px',
-                        boxShadow: '0 2px 8px rgba(245, 158, 11, 0.45)',
-                        zIndex: 2,
-                        letterSpacing: '0.4px'
-                      }}>
+                      <div 
+                        className="book-favorite-badge"
+                        style={{ 
+                          position: 'absolute', 
+                          top: '10px', 
+                          left: '10px', 
+                          background: 'linear-gradient(135deg, #f59e0b, #d97706)', 
+                          color: '#ffffff', 
+                          padding: '2px 7px', 
+                          borderRadius: '6px', 
+                          fontSize: '0.62rem', 
+                          fontWeight: '800', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '3px',
+                          boxShadow: '0 2px 8px rgba(245, 158, 11, 0.45)',
+                          zIndex: 2,
+                          letterSpacing: '0.4px'
+                        }}>
                         <Flame size={10} fill="#ffffff" strokeWidth={0} /> FAVORIT
                       </div>
                     )}
@@ -629,7 +632,7 @@ function QRSystem() {
                       </div>
 
                       {/* Bar Informasi: Lokasi Rak & Bintang Rating */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.72rem' }}>
+                      <div className="book-meta-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.72rem' }}>
                         <span style={{ 
                           background: 'rgba(255,255,255,0.06)', 
                           padding: '2px 8px', 
@@ -703,7 +706,7 @@ function QRSystem() {
           {/* FLOATING ACTION BAR: KONFIRMASI PEMESANAN BUKU */}
           {/* ========================================================= */}
           {selectedBooks.length > 0 && (
-            <div style={{ 
+            <div className="floating-order-bar" style={{ 
               position: 'sticky', 
               bottom: '1.5rem', 
               marginTop: '2.5rem', 

@@ -27,7 +27,7 @@ function LostFound() {
   const fetchItems = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/lost-found');
+      const res = await fetch('/api/lost-found');
       if (res.ok) {
         const data = await res.json();
         setItems(data);
@@ -128,7 +128,7 @@ function LostFound() {
     }
 
     try {
-      const res = await fetch('http://localhost:5000/api/lost-found', {
+      const res = await fetch('/api/lost-found', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -198,7 +198,7 @@ function LostFound() {
   };
 
   return (
-    <div className="glass-panel" style={{ maxWidth: '900px', margin: '0 auto', padding: '2rem 1.5rem' }}>
+    <div className="glass-panel lf-panel" style={{ maxWidth: '900px', margin: '0 auto' }}>
       {/* Header Halaman */}
       <div className="page-header" style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(99, 102, 241, 0.15)', padding: '4px 14px', borderRadius: '20px', color: 'var(--primary-color)', fontSize: '0.85rem', fontWeight: '700', marginBottom: '0.8rem' }}>
@@ -233,9 +233,9 @@ function LostFound() {
       </div>
 
       {/* Tab Navigasi */}
-      <div style={{ display: 'flex', gap: '0.8rem', marginBottom: '1.8rem', flexWrap: 'wrap' }}>
+      <div className="lf-tab-container" style={{ display: 'flex', gap: '0.8rem', marginBottom: '1.8rem', flexWrap: 'wrap' }}>
         <button 
-          className={`btn ${activeTab === 'found' ? '' : 'btn-secondary'}`}
+          className={`btn lf-tab-btn ${activeTab === 'found' ? '' : 'btn-secondary'}`}
           style={{ 
             flex: 1, 
             minWidth: '200px',
@@ -250,7 +250,7 @@ function LostFound() {
         </button>
 
         <button 
-          className={`btn ${activeTab === 'claimed' ? '' : 'btn-secondary'}`}
+          className={`btn lf-tab-btn ${activeTab === 'claimed' ? '' : 'btn-secondary'}`}
           style={{ 
             flex: 1, 
             minWidth: '200px',
@@ -265,7 +265,7 @@ function LostFound() {
         </button>
 
         <button 
-          className={`btn ${activeTab === 'report' ? '' : 'btn-secondary'}`}
+          className={`btn lf-tab-btn ${activeTab === 'report' ? '' : 'btn-secondary'}`}
           style={{ 
             flex: '0 0 auto',
             background: activeTab === 'report' ? 'var(--primary-color)' : '',
