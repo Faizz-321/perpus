@@ -5,6 +5,7 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: true, // Mengizinkan akses dari network lokal
     proxy: {
       '/api': {
         target: 'http://localhost:5000',

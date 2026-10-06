@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Send, Loader2, Ticket, CheckCircle2, Clock, Search, BookOpen, AlertCircle, XCircle, Plus, Check, ChevronLeft, ChevronRight, Bookmark, MapPin, Volume2, Star, Flame, Sparkles, MessageSquare } from 'lucide-react';
+import { Send, Loader2, Ticket, CheckCircle2, Clock, Search, BookOpen, AlertCircle, XCircle, Plus, Check, ChevronLeft, ChevronRight, ChevronDown, Bookmark, MapPin, Volume2, Star, Flame, Sparkles, MessageSquare } from 'lucide-react';
 import { announceTableOrder } from '../utils/soundAnnouncement';
 import { useModal } from '../context/ModalContext';
 
@@ -30,7 +30,8 @@ function QRSystem() {
   const [loadingBooks, setLoadingBooks] = useState(true);
   const [selectedBooks, setSelectedBooks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedShelf, setSelectedShelf] = useState('ALL');
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const categories = useMemo(() => Array.from(new Set(books.map(b => b.category).filter(Boolean))), [books]);
   const [currentPage, setCurrentPage] = useState(1);
   const booksPerPage = 18;
 
@@ -137,42 +138,39 @@ function QRSystem() {
     }
   }, [activeOrder?.status, activeOrder?.table_no, activeOrder?.ticket_code]);
 
-  // Filter & Urutkan daftar buku berdasarkan pencarian, rak, atau terfavorit
+  // Filter & Urutkan daftar buku berdasarkan pencarian, kategori, atau terfavorit
   const filteredBooks = useMemo(() => {
     let result = [...books];
 
     // Jika filter TERFAVORIT aktif
-    if (selectedShelf === 'FAVORITE') {
+    if (selectedCategory === 'FAVORITE') {
       result.sort((a, b) => {
         const rDiff = (parseFloat(b.rating) || 0) - (parseFloat(a.rating) || 0);
         if (Math.abs(rDiff) > 0.05) return rDiff;
         return (b.read_count || 0) - (a.read_count || 0);
       });
-    } else if (selectedShelf !== 'ALL') {
-      // Filter Rak spesifik
-      result = result.filter(book => 
-        book.shelf_location && book.shelf_location.toLowerCase().includes(`rak ${selectedShelf.toLowerCase()}`)
-      );
+    } else if (selectedCategory !== 'ALL') {
+      result = result.filter(book => book.category === selectedCategory);
     }
 
-    // Filter Pencarian Judul & Penulis
+    // Filter Pencarian Judul, Penulis & Kategori
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(book => {
         const matchTitle = book.title.toLowerCase().includes(q);
         const matchAuthor = book.author.toLowerCase().includes(q);
-        const matchShelf = book.shelf_location && book.shelf_location.toLowerCase().includes(q);
-        return matchTitle || matchAuthor || matchShelf;
+        const matchCat = book.category && book.category.toLowerCase().includes(q);
+        return matchTitle || matchAuthor || matchCat;
       });
     }
 
     return result;
-  }, [books, selectedShelf, searchQuery]);
+  }, [books, selectedCategory, searchQuery]);
 
   // Reset ke halaman 1 jika filter berubah
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedShelf]);
+  }, [searchQuery, selectedCategory]);
 
   // Pagination
   const totalPages = Math.ceil(filteredBooks.length / booksPerPage) || 1;
@@ -228,10 +226,7 @@ function QRSystem() {
 
     setIsSubmitting(true);
 
-    const combinedTitles = selectedBooks.map(b => {
-      const rakInfo = b.shelf_location ? b.shelf_location.replace('Lemari 3, ', '') : 'Rak 1';
-      return `${b.title} [${rakInfo}]`;
-    }).join(', ');
+    const combinedTitles = selectedBooks.map(b => b.title).join(', ');
 
     try {
       const res = await fetch('/api/orders', {
@@ -378,7 +373,7 @@ function QRSystem() {
         <div>
           <div className="page-header" style={{ textAlign: 'center', marginBottom: '2rem' }}>
             <h1>Katalog & Pesan Buku Meja</h1>
-            <p>Koleksi Buku Resmi <strong>Perpustakaan Umum Kota Parepare</strong> (Lemari 3, Rak 1 - 5)</p>
+            <p>Koleksi Buku Resmi <strong>Perpustakaan Umum Kota Parepare</strong></p>
           </div>
 
           {/* Pemilihan Nomor Meja Pengunjung */}
@@ -399,14 +394,14 @@ function QRSystem() {
             </select>
           </div>
 
-          {/* Bar Pencarian Buku & Filter Rak / Favorit */}
+          {/* Bar Pencarian Buku & Filter Kategori / Favorit */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.8rem' }}>
             <div style={{ position: 'relative', width: '100%' }}>
               <Search size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input 
                 type="text" 
                 className="form-control" 
-                placeholder="Cari judul novel (misal: Rindu, Sewu Dino, Marmut Merah Jambu) atau pengarang (Tere Liye, Fiersa Besari)..."
+                placeholder="Cari judul buku (misal: Sebelas, Coki Pardede, Filsafat) atau pengarang..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{ paddingLeft: '3rem', fontSize: '0.95rem' }}
@@ -421,53 +416,115 @@ function QRSystem() {
               )}
             </div>
 
-            {/* Tombol Tab Filter Rak & Koleksi Terfavorit */}
-            <div className="filter-shelf-container" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginRight: '4px' }}>
-                <MapPin size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> Filter:
-              </span>
-              {[
-                { id: 'ALL', label: `Semua Rak (${books.length})` },
-                { id: 'FAVORITE', label: '⭐ Koleksi Terfavorit', isSpecial: true },
-                { id: '1', label: 'Rak 1' },
-                { id: '2', label: 'Rak 2' },
-                { id: '3', label: 'Rak 3' },
-                { id: '4', label: 'Rak 4' },
-                { id: '5', label: 'Rak 5' }
-              ].map(shelf => {
-                const isActive = selectedShelf === shelf.id;
-                return (
-                  <button 
-                    key={shelf.id}
-                    className={`btn ${isActive ? '' : 'btn-secondary'}`}
-                    style={{ 
-                      padding: '0.4rem 0.85rem', 
-                      fontSize: '0.82rem',
-                      background: isActive 
-                        ? (shelf.isSpecial ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'var(--primary-color)') 
-                        : (shelf.isSpecial ? 'rgba(245, 158, 11, 0.15)' : ''),
-                      borderColor: isActive 
-                        ? (shelf.isSpecial ? '#f59e0b' : 'var(--primary-color)') 
-                        : (shelf.isSpecial ? 'rgba(245, 158, 11, 0.4)' : ''),
-                      color: shelf.isSpecial && !isActive ? '#fcd34d' : '',
-                      boxShadow: isActive && shelf.isSpecial ? '0 0 14px rgba(245, 158, 11, 0.5)' : ''
-                    }}
-                    onClick={() => setSelectedShelf(shelf.id)}
-                  >
-                    {shelf.label}
-                  </button>
-                );
-              })}
+            {/* Bar Tab Filter Ringkas & Rapi dengan Dropdown Toggle Kategori */}
+            <div className="filter-shelf-container" style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              {/* Tombol Toggle Semua Buku */}
+              <button 
+                type="button"
+                className={`btn ${selectedCategory === 'ALL' ? '' : 'btn-secondary'}`}
+                style={{ 
+                  padding: '0.42rem 1rem', 
+                  fontSize: '0.84rem',
+                  borderRadius: '20px',
+                  background: selectedCategory === 'ALL' ? 'var(--primary-color)' : 'rgba(255, 255, 255, 0.05)',
+                  borderColor: selectedCategory === 'ALL' ? 'var(--primary-color)' : 'var(--surface-border)',
+                  fontWeight: '600',
+                  boxShadow: selectedCategory === 'ALL' ? '0 0 14px var(--primary-glow)' : 'none'
+                }}
+                onClick={() => setSelectedCategory('ALL')}
+              >
+                📚 Semua Buku ({books.length})
+              </button>
+
+              {/* Tombol Toggle Terfavorit */}
+              <button 
+                type="button"
+                className={`btn ${selectedCategory === 'FAVORITE' ? '' : 'btn-secondary'}`}
+                style={{ 
+                  padding: '0.42rem 1rem', 
+                  fontSize: '0.84rem',
+                  borderRadius: '20px',
+                  background: selectedCategory === 'FAVORITE' 
+                    ? 'linear-gradient(135deg, #f59e0b, #d97706)' 
+                    : 'rgba(245, 158, 11, 0.1)',
+                  borderColor: selectedCategory === 'FAVORITE' 
+                    ? '#f59e0b' 
+                    : 'rgba(245, 158, 11, 0.35)',
+                  color: selectedCategory === 'FAVORITE' ? '#ffffff' : '#fcd34d',
+                  fontWeight: '600',
+                  boxShadow: selectedCategory === 'FAVORITE' ? '0 0 14px rgba(245, 158, 11, 0.5)' : 'none'
+                }}
+                onClick={() => setSelectedCategory('FAVORITE')}
+              >
+                ⭐ Terfavorit
+              </button>
+
+              {/* Toggle Dropdown Pemilih Kategori */}
+              <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                <select 
+                  value={selectedCategory !== 'ALL' && selectedCategory !== 'FAVORITE' ? selectedCategory : ''}
+                  onChange={(e) => setSelectedCategory(e.target.value || 'ALL')}
+                  style={{
+                    padding: '0.42rem 2.2rem 0.42rem 1rem',
+                    fontSize: '0.84rem',
+                    borderRadius: '20px',
+                    fontWeight: '600',
+                    background: selectedCategory !== 'ALL' && selectedCategory !== 'FAVORITE' 
+                      ? 'var(--primary-color)' 
+                      : 'rgba(255, 255, 255, 0.05)',
+                    color: selectedCategory !== 'ALL' && selectedCategory !== 'FAVORITE' ? '#ffffff' : 'var(--text-main)',
+                    border: selectedCategory !== 'ALL' && selectedCategory !== 'FAVORITE'
+                      ? '1px solid var(--primary-color)'
+                      : '1px solid var(--surface-border)',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    boxShadow: selectedCategory !== 'ALL' && selectedCategory !== 'FAVORITE' ? '0 0 14px var(--primary-glow)' : 'none',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <option value="" style={{ background: '#1e293b', color: '#cbd5e1' }}>
+                    🏷️ {selectedCategory !== 'ALL' && selectedCategory !== 'FAVORITE' ? `Kategori: ${selectedCategory}` : `Pilih Kategori (${categories.length})...`}
+                  </option>
+                  {categories.map(cat => (
+                    <option key={cat} value={cat} style={{ background: '#1e293b', color: '#ffffff' }}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={14} style={{ position: 'absolute', right: '12px', pointerEvents: 'none', color: selectedCategory !== 'ALL' && selectedCategory !== 'FAVORITE' ? '#ffffff' : 'var(--text-muted)' }} />
+              </div>
+
+              {/* Tombol Reset Cepat jika Filter Kategori Sedang Aktif */}
+              {selectedCategory !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory('ALL')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    padding: '2px 6px',
+                    textDecoration: 'underline'
+                  }}
+                  title="Kembalikan ke semua buku"
+                >
+                  Reset
+                </button>
+              )}
             </div>
           </div>
 
           {/* Bar Status Pemilihan Buku */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '0.8rem' }}>
             <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-              {selectedShelf === 'FAVORITE' ? (
-                <span>Menampilkan <strong>{filteredBooks.length}</strong> buku (diurutkan berdasarkan bintang rating tertinggi & paling sering dibaca)</span>
+              {selectedCategory === 'FAVORITE' ? (
+                <span>Menampilkan <strong>{filteredBooks.length}</strong> buku (koleksi rating tertinggi)</span>
               ) : (
-                <span>Menampilkan <strong>{filteredBooks.length}</strong> buku {selectedShelf !== 'ALL' ? `di Rak ${selectedShelf}` : ''}</span>
+                <span>Menampilkan <strong>{filteredBooks.length}</strong> buku {selectedCategory !== 'ALL' ? `kategori ${selectedCategory}` : ''}</span>
               )}
             </div>
 
@@ -503,7 +560,7 @@ function QRSystem() {
               <button 
                 className="btn btn-secondary" 
                 style={{ marginTop: '1rem', fontSize: '0.85rem' }} 
-                onClick={() => { setSearchQuery(''); setSelectedShelf('ALL'); }}
+                onClick={() => { setSearchQuery(''); setSelectedCategory('ALL'); }}
               >
                 Reset Pencarian
               </button>
@@ -598,29 +655,61 @@ function QRSystem() {
                       </div>
                     )}
 
-                    {/* Sampul Buku 3D Realistis */}
-                    <div 
-                      className="book-cover-wrapper"
-                      style={{ 
-                        background: theme.bg,
-                        borderColor: theme.border
-                      }}
-                    >
-                      {/* DDC Classification Badge */}
-                      <div className="book-cover-ddc">
-                        DDC {book.classification || '813'}
+                    {/* Sampul Buku 3D Realistis atau Gambar dari API */}
+                    {book.cover_url ? (
+                      <div className="book-cover-wrapper" style={{ padding: 0, overflow: 'hidden', border: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column' }}>
+                        <img 
+                          src={book.cover_url} 
+                          alt={`Sampul ${book.title}`} 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                          onLoad={(e) => {
+                            // OpenLibrary mengembalikan gambar 1x1 pixel transparan jika ISBN tidak ditemukan
+                            if (e.target.naturalWidth <= 1) {
+                              e.target.style.display = 'none';
+                              if (e.target.nextSibling) {
+                                e.target.nextSibling.style.display = 'flex';
+                                e.target.nextSibling.style.height = '100%';
+                              }
+                            }
+                          }}
+                          onError={(e) => { 
+                            e.target.style.display = 'none'; 
+                            if (e.target.nextSibling) {
+                              e.target.nextSibling.style.display = 'flex'; 
+                              e.target.nextSibling.style.height = '100%';
+                            }
+                          }}
+                        />
+                        <div style={{ display: 'none', width: '100%', height: '100%', background: theme.bg, flexDirection: 'column', position: 'relative', flex: 1 }}>
+                          <div className="book-cover-ddc">DDC {book.classification || '813'}</div>
+                          <div className="book-cover-title" style={{ marginTop: 'auto', marginBottom: 'auto' }}>{book.title}</div>
+                          <div className="book-cover-author" style={{ marginTop: 'auto' }}>✍️ {book.author}</div>
+                        </div>
                       </div>
+                    ) : (
+                      <div 
+                        className="book-cover-wrapper"
+                        style={{ 
+                          background: theme.bg,
+                          borderColor: theme.border
+                        }}
+                      >
+                        {/* DDC Classification Badge */}
+                        <div className="book-cover-ddc">
+                          DDC {book.classification || '813'}
+                        </div>
 
-                      {/* Judul Buku Bergaya Serif Elegan */}
-                      <div className="book-cover-title">
-                        {book.title}
-                      </div>
+                        {/* Judul Buku Bergaya Serif Elegan */}
+                        <div className="book-cover-title">
+                          {book.title}
+                        </div>
 
-                      {/* Penulis Buku */}
-                      <div className="book-cover-author">
-                        ✍️ {book.author}
+                        {/* Penulis Buku */}
+                        <div className="book-cover-author">
+                          ✍️ {book.author}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Info Tambahan di Bawah Cover */}
                     <div>
@@ -631,39 +720,40 @@ function QRSystem() {
                         {book.author}
                       </div>
 
-                      {/* Bar Informasi: Lokasi Rak & Bintang Rating */}
-                      <div className="book-meta-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.72rem' }}>
+                      {/* Bar Informasi: Kategori di Kiri, Rating Bintang di Kanan Bawah */}
+                      <div className="book-meta-row" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.72rem' }}>
                         <span style={{ 
-                          background: 'rgba(255,255,255,0.06)', 
+                          background: 'rgba(255,255,255,0.07)', 
                           padding: '2px 8px', 
                           borderRadius: '4px', 
-                          color: '#cbd5e1',
+                          color: '#94a3b8',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '4px'
+                          fontWeight: '500'
                         }}>
-                          <MapPin size={11} /> {book.shelf_location ? book.shelf_location.replace('Lemari 3, ', '') : 'Rak 1'}
+                          {book.category || 'Koleksi Umum'}
                         </span>
 
-                        {/* Indikator Bintang Rating */}
-                        <div
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '3px',
-                            color: '#facc15',
-                            fontWeight: '700',
-                            background: 'rgba(250, 204, 21, 0.12)',
-                            padding: '2px 7px',
-                            borderRadius: '12px',
-                            border: '1px solid rgba(250, 204, 21, 0.28)',
-                            fontSize: '0.72rem'
-                          }}
-                        >
-                          <Star size={11} fill="#facc15" strokeWidth={0} /> {parseFloat(book.rating || 4.5).toFixed(1)}
-                          <span style={{ color: 'var(--text-muted)', fontWeight: '400', fontSize: '0.66rem' }}>
-                            ({book.read_count || 10}x)
-                          </span>
+                        {/* Kolom Kanan Bawah: Rating Bintang & Slot Stok Buku */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+                          {/* Indikator Bintang Rating */}
+                          <div
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              color: '#facc15',
+                              fontWeight: '700',
+                              background: 'rgba(250, 204, 21, 0.12)',
+                              padding: '2px 7px',
+                              borderRadius: '12px',
+                              border: '1px solid rgba(250, 204, 21, 0.28)',
+                              fontSize: '0.72rem'
+                            }}
+                          >
+                            <Star size={11} fill="#facc15" strokeWidth={0} /> {parseFloat(book.rating || 4.5).toFixed(1)}
+                          </div>
+                          {/* (Slot di bawah rating disiapkan untuk stok buku nantinya) */}
                         </div>
                       </div>
                     </div>
@@ -913,7 +1003,7 @@ function QRSystem() {
                 ) : activeOrder.status === 'searching' ? (
                   <div style={{ background: 'rgba(99, 102, 241, 0.2)', border: '1px solid var(--primary-color)', borderRadius: '12px', padding: '1rem', textAlign: 'center', marginBottom: '1.2rem' }}>
                     <div style={{ color: '#a5b4fc', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                      <Search size={18} className="animate-spin" /> Staf Sedang Mengambil Buku di Rak...
+                      <Search size={18} className="animate-spin" /> Staf Sedang Menyiapkan Buku Anda...
                     </div>
                     <p style={{ fontSize: '0.8rem', marginTop: '4px', color: 'var(--text-muted)' }}>
                       Mohon tetap duduk di {activeOrder.table_no}, layar ini otomatis berubah saat buku siap.
@@ -947,7 +1037,7 @@ function QRSystem() {
                   </div>
                   <div className={`timeline-step ${currentStepIdx >= 2 ? (currentStepIdx > 2 ? 'completed' : 'active') : ''}`}>
                     <div className="timeline-dot">2</div>
-                    <div className="timeline-label">Dicari di Rak</div>
+                    <div className="timeline-label">Diproses Staf</div>
                   </div>
                   <div className={`timeline-step ${currentStepIdx >= 3 ? (currentStepIdx > 3 ? 'completed' : 'active') : ''}`}>
                     <div className="timeline-dot">3</div>
@@ -993,7 +1083,7 @@ function QRSystem() {
                   <XCircle size={15} /> Batalkan Pesanan (Salah Pilih Buku)
                 </button>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '6px' }}>
-                  *Anda dapat membatalkan pesanan sebelum staf mulai mencari buku di rak.
+                  *Anda dapat membatalkan pesanan sebelum staf mulai menyiapkan buku.
                 </p>
               </div>
             )}
@@ -1051,7 +1141,7 @@ function QRSystem() {
                       {rateModalBook.title}
                     </h2>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted, #94a3b8)', marginTop: '2px' }}>
-                      ✍️ {rateModalBook.author} • {rateModalBook.shelf_location || 'Lemari 3'}
+                      ✍️ {rateModalBook.author} • {rateModalBook.category || 'Koleksi Umum'}
                     </p>
                   </div>
                   <button 

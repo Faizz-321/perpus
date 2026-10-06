@@ -1,6 +1,7 @@
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
 
@@ -8,6 +9,7 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ limit: '25mb', extended: true }));
+app.use('/covers', express.static(path.join(__dirname, '../public/covers')));
 
 // Konfigurasi Koneksi Database MySQL (XAMPP Default)
 // Menggunakan createPool agar koneksi lebih stabil dan otomatis reconnect

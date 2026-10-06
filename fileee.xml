@@ -1,0 +1,1243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<collection xmlns="http://www.loc.gov/MARC21/slim"> 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014140</controlfield>
+ <controlfield tag="005">20261005085913</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-1026000009</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">261005                g          0 ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">979-010-460-0</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">028.5</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">028.5 NAN l.2</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Bunda Nanit</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">Lintang si Bintang /</subfield>
+  <subfield code="c">Bunda Nanit, Jodhi P. Giriarso; Penyunting, Imran Laha</subfield>
+ </datafield>
+ <datafield tag="250" ind1=" " ind2=" ">
+  <subfield code="a">cet.1</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">32 halaman :</subfield>
+  <subfield code="b">Ilustrasi ;</subfield>
+  <subfield code="c">20 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Buku Anak</subfield>
+ </datafield>
+ <datafield tag="700" ind1="0" ind2=" ">
+  <subfield code="a">Jodhi P. Giriarso</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="700" ind1="0" ind2=" ">
+  <subfield code="a">Imran Laha</subfield>
+  <subfield code="e">Penyunting</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Jakarta :</subfield>
+  <subfield code="b">Bumi Aksara Group,</subfield>
+  <subfield code="c">2008</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks dan ilustrasi</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">018484</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014139</controlfield>
+ <controlfield tag="005">20261005084149</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-1026000008</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">261005                g          0 ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">978-602-6847-49-2</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">028.55</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">028.55 YUG y.4</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Yugha Erlangga</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">Yuk, Saling Berbagi :</subfield>
+  <subfield code="b">Pengamalan Sila Kelima /</subfield>
+  <subfield code="c">Yugha Erlangga; Penyunting, Alwi Kosasih</subfield>
+ </datafield>
+ <datafield tag="250" ind1=" " ind2=" ">
+  <subfield code="a">cet.6</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">48 halaman ;</subfield>
+  <subfield code="c">23 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Buku Anak</subfield>
+ </datafield>
+ <datafield tag="700" ind1="0" ind2=" ">
+  <subfield code="a">Alwi Kosasih</subfield>
+  <subfield code="e">Penyunting</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Jakarta :</subfield>
+  <subfield code="b">Erlangga,</subfield>
+  <subfield code="c">2022</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks dan ilustrasi</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">036 420</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014138</controlfield>
+ <controlfield tag="005">20261005083134</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-1026000007</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">261005                g          0 ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">978-979-075-953-4</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">028.55</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">028.55 EVA p.4</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Eva Montanari</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">Putri Matilda /</subfield>
+  <subfield code="c">Eva Montanari; Penerjemah, Phebe Alexander; Penyunting, Shelome Angeli, Michael Tobing</subfield>
+ </datafield>
+ <datafield tag="250" ind1=" " ind2=" ">
+  <subfield code="a">cet.5</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">28 halaman :</subfield>
+  <subfield code="b">Ilustrasi ;</subfield>
+  <subfield code="c">23 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Buku Anak</subfield>
+ </datafield>
+ <datafield tag="700" ind1="0" ind2=" ">
+  <subfield code="a">Phebe Alexander</subfield>
+  <subfield code="e">Penerjemah</subfield>
+ </datafield>
+ <datafield tag="700" ind1="0" ind2=" ">
+  <subfield code="a">Shelome Angeli</subfield>
+  <subfield code="e">Penyunting</subfield>
+ </datafield>
+ <datafield tag="700" ind1="0" ind2=" ">
+  <subfield code="a">Michael Tobing</subfield>
+  <subfield code="e">Penyunting</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Jakarta :</subfield>
+  <subfield code="b">Erlangga,</subfield>
+  <subfield code="c">2013</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks dan ilustrasi</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">033.056</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014137</controlfield>
+ <controlfield tag="005">20261001022151</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-1026000006</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">261001                g          | ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">978-602-247-011-3</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">F 813</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">F 813 ALE m</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Alexandra Ivy</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">My Lord Vampire :</subfield>
+  <subfield code="b">Kekasih Vampirku /</subfield>
+  <subfield code="c">Alexandra Ivy.; Penerjemah, Yolanda Oktavia.; Penyunting, Jantje</subfield>
+ </datafield>
+ <datafield tag="250" ind1=" " ind2=" ">
+  <subfield code="a">Cet. 1</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">328 Halaman ;</subfield>
+  <subfield code="c">18 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Fiksi Indonesia</subfield>
+ </datafield>
+ <datafield tag="700" ind1="0" ind2=" ">
+  <subfield code="a">Yolanda Oktavia</subfield>
+  <subfield code="e">Penerjemah</subfield>
+ </datafield>
+ <datafield tag="700" ind1="0" ind2=" ">
+  <subfield code="a">Jantje</subfield>
+  <subfield code="e">Penyunting</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Jakarta :</subfield>
+  <subfield code="b">Daston Books,</subfield>
+  <subfield code="c">2012</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014136</controlfield>
+ <controlfield tag="005">20261001015101</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-1026000005</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">261001                g          | ind  </controlfield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">297.43</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">297.43 IBN d</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Ibnu Ahyar Abdillah</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">Do'a - Do'a Mustajab :</subfield>
+  <subfield code="b">Kumpulan Do'a - Do'a Pilihan dari Hadist dan Al-Qur'an /</subfield>
+  <subfield code="c">Ibnu Ahyar Abdillah</subfield>
+ </datafield>
+ <datafield tag="250" ind1=" " ind2=" ">
+  <subfield code="a">Cet. 1</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">x, 318 Halaman ;</subfield>
+  <subfield code="c">15,5 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Doa Mustajab</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Surabaya :</subfield>
+  <subfield code="b">Yoshiko,</subfield>
+  <subfield code="c">2005</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045591</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014135</controlfield>
+ <controlfield tag="005">20261001102252</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-1026000004</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">261001                g          | ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">979-97464-4-2</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">297.43</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">297.43 MUH p</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Muhammad Arifin Ilham</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">Panduan Zikir &amp; Doa :</subfield>
+  <subfield code="b">Dilengkapi Panduan Ruqiyah Lengkap /</subfield>
+  <subfield code="c">Muhammad Arifin Ilham</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">44 Halaman ;</subfield>
+  <subfield code="c">17,5 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Zikir &amp; Doa</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">[ s.l ] :</subfield>
+  <subfield code="b">intuisi Pres,</subfield>
+  <subfield code="c">2006</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045590</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014134</controlfield>
+ <controlfield tag="005">20261001095754</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-1026000003</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">261001                g          | ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">979-98251-5-6</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">297.7</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">297.7 MUH m</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Muhammad Nursani</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">Mencari Mutiara Di Dasar Hati /</subfield>
+  <subfield code="c">Muhammad Nursani.; Penyunting, Tim Tarbawi Press</subfield>
+ </datafield>
+ <datafield tag="250" ind1=" " ind2=" ">
+  <subfield code="a">Cet. 2</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">viii, 200 Halaman ;</subfield>
+  <subfield code="c">17,5 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Tasawuf</subfield>
+ </datafield>
+ <datafield tag="700" ind1="0" ind2=" ">
+  <subfield code="a">Tim Tarbawi Press</subfield>
+  <subfield code="e">Penyunting</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Jakarta :</subfield>
+  <subfield code="b">Tarbawi Press,</subfield>
+  <subfield code="c">2006</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045589</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014133</controlfield>
+ <controlfield tag="005">20261001094535</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-1026000002</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">261001                g          | ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">978-602-225-956-5</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">F 813</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">F 813 TIA l</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Tiara Rumasya</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">Langit, Bulan, dan Harapan /</subfield>
+  <subfield code="c">Tiara Rumasya</subfield>
+ </datafield>
+ <datafield tag="250" ind1=" " ind2=" ">
+  <subfield code="a">Cet. 1</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">viii, 80 Halaman ;</subfield>
+  <subfield code="c">19 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Fiksi Indonesia</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Yogyakarta :</subfield>
+  <subfield code="b">Leutikaprio,</subfield>
+  <subfield code="c">2014</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045593</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014132</controlfield>
+ <controlfield tag="005">20261001091233</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-1026000001</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">261001                g          | ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">978-602-04-974-5</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">005.54</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">005.54 JUB a</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Jubile Enterprise</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">Aplikasi Terapan Berbagai Bidang Dengan YBA MS Excel /</subfield>
+  <subfield code="c">Jubile Enterprise</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">x, 141 Halaman :</subfield>
+  <subfield code="b">Ilustrasi ;</subfield>
+  <subfield code="c">21 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Excel</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Yogyakarta :</subfield>
+  <subfield code="b">Elex Media Komputindo,</subfield>
+  <subfield code="c">2013</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045598</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014131</controlfield>
+ <controlfield tag="005">20260930103116</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-0926000122</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">260930                g          | ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">978-979-769-414-2</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">658</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">658 CHR m.1</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">658 CHR m.2</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">658 CHR m.3</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">658 CHR m.4</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">658 CHR m.5</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Chris Rowley</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">Manajemen Sumber Daya Manusia :</subfield>
+  <subfield code="b">The Key Concepts /</subfield>
+  <subfield code="c">Chris Rowley, Keith Jackson.; Penerjemah, Elviyola Pawan</subfield>
+ </datafield>
+ <datafield tag="250" ind1=" " ind2=" ">
+  <subfield code="a">Ed.1 / Cet.2</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">ix, 554 Halaman ;</subfield>
+  <subfield code="c">21 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Pegawai - Manajemen</subfield>
+ </datafield>
+ <datafield tag="700" ind1="0" ind2=" ">
+  <subfield code="a">Keith Jackson</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="700" ind1="0" ind2=" ">
+  <subfield code="a">Elviyola Pawan</subfield>
+  <subfield code="e">Penerjemah</subfield>
+ </datafield>
+ <datafield tag="504" ind1=" " ind2=" ">
+  <subfield code="a">Halaman 459</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Jakarta :</subfield>
+  <subfield code="b">Rajawali Pers,</subfield>
+  <subfield code="c">2012</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.585.</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.586.</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.587.</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.588.</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.589.</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014130</controlfield>
+ <controlfield tag="005">20260930101720</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-0926000121</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">260930                g          | ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">978-979-96946-6-9</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">920</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">920 AND s.4</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">920 AND s.5</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">920 AND s.6</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Andhy Pallawa</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">Sjamsu Alam di Atas Sajadah Pengabdian /</subfield>
+  <subfield code="c">Andhy Pallawa.; Penyunting, Ryan Anshari</subfield>
+ </datafield>
+ <datafield tag="250" ind1=" " ind2=" ">
+  <subfield code="a">Cet. 1</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">xviii, 406 Halaman :</subfield>
+  <subfield code="b">Iustrasi ;</subfield>
+  <subfield code="c">20,5 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Bibliografi Tokoh</subfield>
+ </datafield>
+ <datafield tag="700" ind1="0" ind2=" ">
+  <subfield code="a">Ryan Anshari</subfield>
+  <subfield code="e">Penyunting</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Makassar :</subfield>
+  <subfield code="b">Global Publishing,</subfield>
+  <subfield code="c">2013</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.658</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.659</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.660</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014129</controlfield>
+ <controlfield tag="005">20260930095657</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-0926000120</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">260930                g          | ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">978-979-1274-64-7</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">791.43</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">791.43 ABR</subfield>
+ </datafield>
+ <datafield tag="245" ind1=" " ind2=" ">
+  <subfield code="a">A Brief Cultural History of Indonesian Cinema</subfield>
+ </datafield>
+ <datafield tag="250" ind1=" " ind2=" ">
+  <subfield code="a">Ed. 1</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">195 Halaman :</subfield>
+  <subfield code="b">Ilustrasi ;</subfield>
+  <subfield code="c">22,5 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Film / Sinema</subfield>
+ </datafield>
+ <datafield tag="504" ind1=" " ind2=" ">
+  <subfield code="a">Halaman 190</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Jakarta :</subfield>
+  <subfield code="b">Ministry of Education and Culture Republic Indonesia,</subfield>
+  <subfield code="c">2012</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.696</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014128</controlfield>
+ <controlfield tag="005">20260930094943</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-0926000119</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">260930                g          | ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">979-794-162-0</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">006.7</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">006.7 ADI p</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Adi Baskoro</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">Panduan Praktis Membuat Website Berbasis Joomla ! :</subfield>
+  <subfield code="b">Dilengkapi Cara Membuat Toko Online &amp; Memodifikasi Template /</subfield>
+  <subfield code="c">Adi Baskoro.; Penyunting, Sudarma S</subfield>
+ </datafield>
+ <datafield tag="250" ind1=" " ind2=" ">
+  <subfield code="a">Cet. 1</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">viii, 168 Halaman ;</subfield>
+  <subfield code="c">24 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Membuat Website</subfield>
+ </datafield>
+ <datafield tag="700" ind1="0" ind2=" ">
+  <subfield code="a">Sudarma S</subfield>
+  <subfield code="e">Penyunting</subfield>
+ </datafield>
+ <datafield tag="504" ind1=" " ind2=" ">
+  <subfield code="a">Halaman 166</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Jakarta :</subfield>
+  <subfield code="b">Mediakita,</subfield>
+  <subfield code="c">2009</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.692</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014127</controlfield>
+ <controlfield tag="005">20260930094332</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-0926000118</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">260930                g          0 eng  </controlfield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">006.6</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">006.6 COR</subfield>
+ </datafield>
+ <datafield tag="245" ind1=" " ind2=" ">
+  <subfield code="a">Corel Photo Paint :</subfield>
+  <subfield code="b">The Best In Photo-Editing And Bitmap Creation 5</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">xxv, 231 Halaman :</subfield>
+  <subfield code="b">Ilustrasi ;</subfield>
+  <subfield code="c">23,5 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Software</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Ottawa :</subfield>
+  <subfield code="b">Corel,</subfield>
+  <subfield code="c">[s.a]</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.693</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014126</controlfield>
+ <controlfield tag="005">20260930093829</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-0926000117</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">260930                g          | ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">979-663-595-x</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">005.446</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">005.446 DJO m</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Djoko Pramono</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">Microsoft Windows NT. 4.0 Server /</subfield>
+  <subfield code="c">Djoko Pramono</subfield>
+ </datafield>
+ <datafield tag="250" ind1=" " ind2=" ">
+  <subfield code="a">Cet. 3</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">viii, 175 Halaman :</subfield>
+  <subfield code="b">Ilustrasi ;</subfield>
+  <subfield code="c">23 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Microsoft Windows</subfield>
+ </datafield>
+ <datafield tag="504" ind1=" " ind2=" ">
+  <subfield code="a">Halaman 172</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Jakarta :</subfield>
+  <subfield code="b">Elex Media Komputindo,</subfield>
+  <subfield code="c">2001</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.694</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014125</controlfield>
+ <controlfield tag="005">20260930093426</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-0926000116</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">260930                g          | ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">978-979-8433-15-3</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">297.273</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">297.273 HAS i</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Hasan Aedy</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">Indahnya Ekonomi Islam /</subfield>
+  <subfield code="c">Hasan Aedy</subfield>
+ </datafield>
+ <datafield tag="250" ind1=" " ind2=" ">
+  <subfield code="a">Cet. 2</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">vi, 106 Halaman ;</subfield>
+  <subfield code="c">24 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Indahnya Ekonomi Islam</subfield>
+ </datafield>
+ <datafield tag="504" ind1=" " ind2=" ">
+  <subfield code="a">Halaman 102 - 105</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Bandung :</subfield>
+  <subfield code="b">Alfabeta,</subfield>
+  <subfield code="c">2007</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.695</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014124</controlfield>
+ <controlfield tag="005">20260930093010</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-0926000115</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">260930                g          | ind  </controlfield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">348.598</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">348.598 IND k</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Indonesia</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">Kepres RI Nomor 17 Tahun 2010 Tentang Persetujuan Perubahan Anggaran Dasar &amp; ART Kamar Dagang Dan Industri /</subfield>
+  <subfield code="c">Indonesia</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">xv, 130 Halaman ;</subfield>
+  <subfield code="c">17,5 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Kepres</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Jakarta :</subfield>
+  <subfield code="b">Kamar Dagang Dan Industri Indonesia,</subfield>
+  <subfield code="c">2010</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.681</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014123</controlfield>
+ <controlfield tag="005">20260930090906</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-0926000114</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">260930                g          | ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">979-523-837-X</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">005.276.2</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">005.276.2 VIT c</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Vita Prihatoni Purnomo</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">CSS@ STYLIST :</subfield>
+  <subfield code="b">Menata Gaya Halaman WEB Dengan CSS2 /</subfield>
+  <subfield code="c">Vita Prihatoni Purnomo</subfield>
+ </datafield>
+ <datafield tag="250" ind1=" " ind2=" ">
+  <subfield code="a">Cet. 1</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">viii, 214 Halaman ;</subfield>
+  <subfield code="c">20,5 cm</subfield>
+ </datafield>
+ <datafield tag="504" ind1=" " ind2=" ">
+  <subfield code="a">Halaman 208</subfield>
+ </datafield>
+ <datafield tag="600" ind1=" " ind2="4">
+  <subfield code="a">Web Dengan CSS2</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Jakarta :</subfield>
+  <subfield code="b">Dian Rakyat,</subfield>
+  <subfield code="c">2007</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.682</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014122</controlfield>
+ <controlfield tag="005">20260930090346</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-0926000113</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">260930                g          | ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">978-20-4361-6</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">006.7</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">006.7 MOH b</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Mohammad Jeprie</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">Buku Latihan Membuat Efek Desain Dengan Photoshop 7.0 /</subfield>
+  <subfield code="c">Mohammad Jeprie</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">x, 276 Halaman ;</subfield>
+  <subfield code="c">21 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Adobe</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Jakarta :</subfield>
+  <subfield code="b">Gramedia,</subfield>
+  <subfield code="c">2003</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.683</subfield>
+ </datafield>
+</record>
+ 
+<record xmlns="http://www.loc.gov/MARC21/slim">
+ <leader>     na                 </leader>
+ <controlfield tag="001">INLIS000000000014121</controlfield>
+ <controlfield tag="005">20260930085943</controlfield>
+ <datafield tag="035" ind1=" " ind2=" ">
+  <subfield code="a">0010-0926000112</subfield>
+ </datafield>
+ <controlfield tag="007">ta</controlfield>
+ <controlfield tag="008">260930                g          | ind  </controlfield>
+ <datafield tag="020" ind1=" " ind2=" ">
+  <subfield code="a">979-20-3474-9</subfield>
+ </datafield>
+ <datafield tag="082" ind1=" " ind2=" ">
+  <subfield code="a">005.276</subfield>
+ </datafield>
+ <datafield tag="084" ind1=" " ind2=" ">
+  <subfield code="a">005.276 GRE t</subfield>
+ </datafield>
+ <datafield tag="100" ind1="0" ind2=" ">
+  <subfield code="a">Gregorius Agung</subfield>
+  <subfield code="e">Pengarang</subfield>
+ </datafield>
+ <datafield tag="245" ind1="1" ind2=" ">
+  <subfield code="a">Tip &amp; Trik Membuat Efek Spesial Website Dengan Dreamweaver 4 /</subfield>
+  <subfield code="c">Gregorius Agung</subfield>
+ </datafield>
+ <datafield tag="300" ind1=" " ind2=" ">
+  <subfield code="a">x, 188 Halaman ;</subfield>
+  <subfield code="c">21 cm</subfield>
+ </datafield>
+ <datafield tag="650" ind1=" " ind2="4">
+  <subfield code="a">Website Dreamweaver</subfield>
+ </datafield>
+ <datafield tag="264" ind1=" " ind2=" ">
+  <subfield code="a">Jakarta :</subfield>
+  <subfield code="b">Elex Media Komputindo,</subfield>
+  <subfield code="c">2002</subfield>
+ </datafield>
+ <datafield tag="336" ind1=" " ind2=" ">
+  <subfield code="2">rdacontent</subfield>
+  <subfield code="a">Teks</subfield>
+ </datafield>
+ <datafield tag="337" ind1=" " ind2=" ">
+  <subfield code="2">rdamedia</subfield>
+  <subfield code="a">Buku</subfield>
+ </datafield>
+ <datafield tag="338" ind1=" " ind2=" ">
+  <subfield code="2">rdacarrier</subfield>
+  <subfield code="a">Volume</subfield>
+ </datafield>
+ <datafield tag="990" ind1=" " ind2=" ">
+  <subfield code="a">045.684</subfield>
+ </datafield>
+</record>
+</collection>
