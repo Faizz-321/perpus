@@ -284,32 +284,11 @@ const booksData = [
 ];
 
 async function seed() {
-  const connection = await mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'bibliotech_db'
-  });
-
-  console.log('Connected to MySQL bibliotech_db!');
-
-  // Hapus data dummy lama di tabel books
-  await connection.execute('DELETE FROM books');
-  await connection.execute('ALTER TABLE books AUTO_INCREMENT = 1');
-
-  // Insert data nyata dari inventaris perpustakaan
-  const query = 'INSERT INTO books (title, author, classification, category, shelf_location, stock) VALUES (?, ?, ?, ?, ?, ?)';
-  
-  let inserted = 0;
-  for (const b of booksData) {
-    await connection.execute(query, [b.title, b.author, b.classification, b.category, b.shelf, b.stock]);
-    inserted++;
-  }
-
-  console.log(`✅ Berhasil memasukkan ${inserted} buku inventaris Perpustakaan Umum Kota Parepare!`);
-  await connection.end();
+  console.log('🔄 Menjalankan seeder gabungan (30 buku INLISLite + 261 buku Lemari 3 + Foto Sampul)...');
+  require('./merge_all_books.js');
 }
 
 seed().catch(err => {
   console.error('Error saat seed:', err);
 });
+
