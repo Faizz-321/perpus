@@ -2,6 +2,7 @@ const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 
@@ -10,6 +11,28 @@ app.use(cors());
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ limit: '25mb', extended: true }));
 app.use('/covers', express.static(path.join(__dirname, '../public/covers')));
+
+// Helper simpan Base64 gambar ke file fisik di folder public/covers
+function saveBase64Image(base64Data) {
+  if (!base64Data) return null;
+  const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+  if (!matches || matches.length !== 3) {
+    if (base64Data.startsWith('http') || base64Data.startsWith('/covers/')) {
+      return base64Data;
+    }
+    return null;
+  }
+  const mime = matches[1].toLowerCase();
+  const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpeg';
+  const buffer = Buffer.from(matches[2], 'base64');
+  const filename = `manual_${Date.now()}_${Math.floor(100 + Math.random() * 900)}.${ext}`;
+  const coversDir = path.join(__dirname, '../public/covers');
+  if (!fs.existsSync(coversDir)) {
+    fs.mkdirSync(coversDir, { recursive: true });
+  }
+  fs.writeFileSync(path.join(coversDir, filename), buffer);
+  return `/covers/${filename}`;
+}
 
 // Konfigurasi Koneksi Database MySQL (XAMPP Default)
 // Menggunakan createPool agar koneksi lebih stabil dan otomatis reconnect
@@ -209,7 +232,7 @@ app.delete('/api/orders/:id', (req, res) => {
 // FITUR 2: BOOKS (Katalog Buku & Rating)
 // ------------------------------------------
 app.get('/api/books', (req, res) => {
-  const query = 'SELECT * FROM books ORDER BY id ASC';
+  const query = 'SELECT * FROM books ORDER BY id DESC';
   pool.query(query, (err, results) => {
     if (err) {
       console.error('Error GET /api/books:', err);
@@ -217,6 +240,154 @@ app.get('/api/books', (req, res) => {
     }
     res.json(results);
   });
+});
+
+// Tambah Buku Baru oleh Staf
+app.post('/api/books', (req, res) => {
+  const { title, author, category, classification, shelf_location, stock, cover_url, cover_image } = req.body;
+  if (!title || !title.trim()) {
+    return res.status(400).json({ error: 'Judul buku wajib diisi' });
+  }
+  if (!author || !author.trim()) {
+    return res.status(400).json({ error: 'Nama pengarang wajib diisi' });
+  }
+
+  let finalCoverUrl = null;
+  if (cover_image && typeof cover_image === 'string' && cover_image.startsWith('data:image')) {
+    finalCoverUrl = saveBase64Image(cover_image);
+  } else if (cover_url && typeof cover_url === 'string' && cover_url.trim()) {
+    finalCoverUrl = cover_url.trim();
+  }
+
+  const query = `
+    INSERT INTO books 
+      (title, author, category, classification, shelf_location, stock, cover_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  pool.query(query, [
+    title.trim(),
+    author.trim(),
+    category && category.trim() ? category.trim() : 'Umum',
+    classification && classification.trim() ? classification.trim() : '000',
+    shelf_location && shelf_location.trim() ? shelf_location.trim() : 'Rak Utama',
+    parseInt(stock) || 1,
+    finalCoverUrl
+  ], (err, result) => {
+    if (err) {
+      console.error('Error POST /api/books:', err);
+      return res.status(500).json({ error: 'Gagal menyimpan buku ke database' });
+    }
+    res.status(201).json({
+      message: 'Buku baru berhasil ditambahkan ke katalog!',
+      bookId: result.insertId,
+      book: {
+        id: result.insertId,
+        title: title.trim(),
+        author: author.trim(),
+        category: category || 'Umum',
+        classification: classification || '000',
+        shelf_location: shelf_location || 'Rak Utama',
+        stock: parseInt(stock) || 1,
+        cover_url: finalCoverUrl
+      }
+    });
+  });
+});
+
+// Update / Edit Buku oleh Staf
+app.put('/api/books/:id', (req, res) => {
+  const { id } = req.params;
+  const { title, author, category, classification, shelf_location, stock, cover_url, cover_image } = req.body;
+  if (!title || !title.trim()) {
+    return res.status(400).json({ error: 'Judul buku wajib diisi' });
+  }
+
+  let finalCoverUrl = cover_url || null;
+  if (cover_image && typeof cover_image === 'string' && cover_image.startsWith('data:image')) {
+    finalCoverUrl = saveBase64Image(cover_image);
+  }
+
+  const query = `
+    UPDATE books 
+    SET 
+      title = ?,
+      author = ?,
+      category = ?,
+      classification = ?,
+      shelf_location = ?,
+      stock = ?,
+      cover_url = ?
+    WHERE id = ?
+  `;
+
+  pool.query(query, [
+    title.trim(),
+    author ? author.trim() : 'Pengarang Tidak Diketahui',
+    category || 'Umum',
+    classification || '000',
+    shelf_location || 'Rak Utama',
+    parseInt(stock) || 1,
+    finalCoverUrl,
+    id
+  ], (err, result) => {
+    if (err) {
+      console.error('Error PUT /api/books/:id:', err);
+      return res.status(500).json({ error: 'Gagal memperbarui data buku' });
+    }
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Buku tidak ditemukan' });
+    }
+    res.json({ message: 'Data buku berhasil diperbarui!', id, cover_url: finalCoverUrl });
+  });
+});
+
+// Hapus Buku dari Katalog oleh Staf
+app.delete('/api/books/:id', (req, res) => {
+  const { id } = req.params;
+  pool.query('DELETE FROM books WHERE id = ?', [id], (err, result) => {
+    if (err) {
+      console.error('Error DELETE /api/books/:id:', err);
+      return res.status(500).json({ error: 'Gagal menghapus buku dari katalog' });
+    }
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Buku tidak ditemukan' });
+    }
+    res.json({ message: 'Buku berhasil dihapus dari katalog!', id });
+  });
+});
+
+// Cari Foto Sampul Otomatis dari Internet (Open Library API)
+app.post('/api/books/search-cover', async (req, res) => {
+  const { title, author } = req.body;
+  if (!title) return res.status(400).json({ error: 'Judul buku wajib diisi' });
+
+  try {
+    const q = encodeURIComponent(`${title} ${author || ''}`.trim());
+    const searchUrl = `https://openlibrary.org/search.json?q=${q}&limit=5`;
+    const response = await fetch(searchUrl, {
+      headers: { 'User-Agent': 'LibrarySystem/1.0 (Student Project)' }
+    });
+    if (!response.ok) throw new Error('Gagal menghubungi OpenLibrary');
+    const data = await response.json();
+
+    const candidates = [];
+    if (data && data.docs) {
+      for (const doc of data.docs) {
+        if (doc.cover_i) {
+          candidates.push({
+            title: doc.title,
+            author: doc.author_name ? doc.author_name.join(', ') : '',
+            cover_url: `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`
+          });
+        }
+      }
+    }
+    res.json({ success: true, count: candidates.length, covers: candidates });
+  } catch (err) {
+    console.error('Error /api/books/search-cover:', err.message);
+    res.status(500).json({ error: 'Gagal mencari sampul online' });
+  }
 });
 
 // Beri rating bintang pada buku (berdasarkan ID buku)

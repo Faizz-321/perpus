@@ -2,14 +2,15 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Clock, Search, CheckCircle, PackageCheck, RefreshCw, Database, Ticket, Check, 
   Filter, Volume2, VolumeX, BellRing, Trash2, Package, Camera, Upload, Eye, X, 
-  AlertCircle, Plus, User, CheckCircle2, Phone, MapPin, MessageCircle 
+  AlertCircle, Plus, User, CheckCircle2, Phone, MapPin, MessageCircle,
+  BookOpen, Edit3, Image, Sparkles, BookPlus
 } from 'lucide-react';
 import { announceTableOrder } from '../utils/soundAnnouncement';
 import { useModal } from '../context/ModalContext';
 
 function StaffDashboard() {
   const { showAlert, showConfirm } = useModal();
-  // Modul Aktif: 'orders' (Pesanan Buku Meja) atau 'lost_found' (Barang Tertinggal)
+  // Modul Aktif: 'orders' (Pesanan Buku Meja), 'lost_found' (Barang Tertinggal), atau 'books' (Kelola & Tambah Buku)
   const [activeModule, setActiveModule] = useState('orders');
 
   // ========================================================
@@ -41,6 +42,32 @@ function StaffDashboard() {
 
   // State Lihat Foto Bukti Pembesaran
   const [viewPhotoItem, setViewPhotoItem] = useState(null);
+
+  // ========================================================
+  // STATE MANAJEMEN BUKU (BOOK MANAGEMENT)
+  // ========================================================
+  const [bookList, setBookList] = useState([]);
+  const [loadingBooks, setLoadingBooks] = useState(false);
+  const [bookSearch, setBookSearch] = useState('');
+  const [bookCatFilter, setBookCatFilter] = useState('all');
+  const [showBookModal, setShowBookModal] = useState(false);
+  const [editingBookId, setEditingBookId] = useState(null);
+  const [bookFormData, setBookFormData] = useState({
+    title: '',
+    author: '',
+    category: 'Sastra & Fiksi',
+    classification: '813',
+    shelf_location: 'Lemari 3, Rak 1',
+    stock: 1,
+    cover_url: '',
+    cover_image: null
+  });
+  const [coverPreview, setCoverPreview] = useState('');
+  const [isSearchingOnline, setIsSearchingOnline] = useState(false);
+  const [onlineCoverResults, setOnlineCoverResults] = useState([]);
+  const [isSubmittingBook, setIsSubmittingBook] = useState(false);
+  const [bookPage, setBookPage] = useState(1);
+  const booksPerPage = 18;
 
   // --------------------------------------------------------
   // FETCH ORDERS (Pesanan Buku)
@@ -101,9 +128,28 @@ function StaffDashboard() {
     }
   };
 
+  // --------------------------------------------------------
+  // FETCH BOOKS (Katalog Buku)
+  // --------------------------------------------------------
+  const fetchBooks = async () => {
+    setLoadingBooks(true);
+    try {
+      const res = await fetch('/api/books');
+      if (res.ok) {
+        const data = await res.json();
+        setBookList(data);
+      }
+    } catch (e) {
+      console.warn('Gagal ambil data buku:', e);
+    } finally {
+      setLoadingBooks(false);
+    }
+  };
+
   useEffect(() => {
     fetchOrders();
     fetchLostFound();
+    fetchBooks();
     const interval = setInterval(() => {
       fetchOrders();
       if (activeModule === 'lost_found') {
@@ -179,6 +225,156 @@ function StaffDashboard() {
       await fetch('/api/orders/cleanup/completed', { method: 'DELETE' });
     } catch (err) {
       console.error('Gagal membersihkan riwayat pesanan:', err);
+    }
+  };
+
+  // --------------------------------------------------------
+  // HANDLERS MANAJEMEN BUKU (BOOK MANAGEMENT)
+  // --------------------------------------------------------
+  const handleOpenAddBook = () => {
+    setEditingBookId(null);
+    setBookFormData({
+      title: '',
+      author: '',
+      category: 'Sastra & Fiksi',
+      classification: '813',
+      shelf_location: 'Lemari 3, Rak 1',
+      stock: 1,
+      cover_url: '',
+      cover_image: null
+    });
+    setCoverPreview('');
+    setOnlineCoverResults([]);
+    setShowBookModal(true);
+  };
+
+  const handleOpenEditBook = (book) => {
+    setEditingBookId(book.id);
+    setBookFormData({
+      title: book.title || '',
+      author: book.author || '',
+      category: book.category || 'Umum',
+      classification: book.classification || '000',
+      shelf_location: book.shelf_location || 'Rak Utama',
+      stock: book.stock || 1,
+      cover_url: book.cover_url || '',
+      cover_image: null
+    });
+    setCoverPreview(book.cover_url || '');
+    setOnlineCoverResults([]);
+    setShowBookModal(true);
+  };
+
+  const handleCoverFileUpload = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showAlert('File yang dipilih harus berupa gambar (JPG, PNG, atau WEBP)!', { type: 'warning', title: 'Format Tidak Sesuai' });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target.result;
+      setCoverPreview(base64);
+      setBookFormData(prev => ({ ...prev, cover_image: base64, cover_url: '' }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSearchOnlineCover = async () => {
+    if (!bookFormData.title || !bookFormData.title.trim()) {
+      showAlert('Ketik judul buku terlebih dahulu untuk mencari sampul online!', { type: 'warning', title: 'Judul Kosong' });
+      return;
+    }
+    setIsSearchingOnline(true);
+    setOnlineCoverResults([]);
+    try {
+      const res = await fetch('/api/books/search-cover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: bookFormData.title, author: bookFormData.author })
+      });
+      const data = await res.json();
+      if (data.covers && data.covers.length > 0) {
+        setOnlineCoverResults(data.covers);
+      } else {
+        showAlert('Tidak ditemukan sampul online yang cocok untuk judul ini. Silakan foto langsung menggunakan kamera HP atau upload file.', { type: 'info', title: 'Sampul Tidak Ditemukan' });
+      }
+    } catch (err) {
+      showAlert('Gagal mencari sampul online: ' + err.message, { type: 'danger', title: 'Gagal' });
+    } finally {
+      setIsSearchingOnline(false);
+    }
+  };
+
+  const handleSelectOnlineCover = (url) => {
+    setCoverPreview(url);
+    setBookFormData(prev => ({ ...prev, cover_url: url, cover_image: null }));
+    setOnlineCoverResults([]);
+  };
+
+  const handleSaveBook = async (e) => {
+    e.preventDefault();
+    if (!bookFormData.title.trim() || !bookFormData.author.trim()) {
+      showAlert('Judul buku dan nama pengarang wajib diisi!', { type: 'warning', title: 'Data Belum Lengkap' });
+      return;
+    }
+
+    setIsSubmittingBook(true);
+    try {
+      const url = editingBookId ? `/api/books/${editingBookId}` : '/api/books';
+      const method = editingBookId ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bookFormData)
+      });
+
+      const result = await res.json();
+
+      if (res.ok) {
+        showAlert(editingBookId ? 'Data buku berhasil diperbarui!' : 'Buku baru berhasil ditambahkan ke katalog!', {
+          type: 'success',
+          title: editingBookId ? 'Buku Diperbarui' : 'Buku Ditambahkan'
+        });
+        setShowBookModal(false);
+        fetchBooks();
+      } else {
+        showAlert('Gagal menyimpan buku: ' + (result.error || 'Terjadi kesalahan pada server'), {
+          type: 'danger',
+          title: 'Gagal'
+        });
+      }
+    } catch (err) {
+      showAlert('Gagal terhubung ke server backend: ' + err.message, { type: 'danger', title: 'Koneksi Gagal' });
+    } finally {
+      setIsSubmittingBook(false);
+    }
+  };
+
+  const handleDeleteBook = async (book) => {
+    const confirmed = await showConfirm(`Yakin ingin menghapus buku "${book.title}" (${book.author}) dari katalog perpustakaan?`, {
+      title: 'Hapus Buku',
+      confirmText: 'Ya, Hapus Buku',
+      cancelText: 'Batal',
+      type: 'danger'
+    });
+
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`/api/books/${book.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        showAlert(`Buku "${book.title}" berhasil dihapus dari sistem.`, { type: 'success', title: 'Buku Dihapus' });
+        fetchBooks();
+      } else {
+        showAlert('Gagal menghapus buku.', { type: 'danger', title: 'Gagal' });
+      }
+    } catch (err) {
+      showAlert('Koneksi gagal: ' + err.message, { type: 'danger', title: 'Error' });
     }
   };
 
@@ -449,6 +645,37 @@ function StaffDashboard() {
               {userReportItems.length} Laporan Pengunjung
             </span>
           )}
+        </button>
+
+        <button
+          className={`btn ${activeModule === 'books' ? '' : 'btn-secondary'}`}
+          style={{
+            padding: '0.65rem 1.4rem',
+            fontSize: '0.92rem',
+            fontWeight: '700',
+            background: activeModule === 'books' ? 'linear-gradient(135deg, #059669, #10b981)' : '',
+            borderColor: activeModule === 'books' ? '#10b981' : '',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: activeModule === 'books' ? '#fff' : ''
+          }}
+          onClick={() => {
+            setActiveModule('books');
+            fetchBooks();
+          }}
+        >
+          <BookOpen size={18} /> Katalog & Tambah Buku
+          <span style={{ 
+            background: activeModule === 'books' ? 'rgba(0,0,0,0.3)' : 'rgba(16,185,129,0.25)', 
+            color: activeModule === 'books' ? '#fff' : '#34d399',
+            padding: '2px 8px', 
+            borderRadius: '12px', 
+            fontSize: '0.75rem',
+            fontWeight: '800'
+          }}>
+            {bookList.length}
+          </span>
         </button>
       </div>
 
@@ -1304,6 +1531,262 @@ function StaffDashboard() {
       )}
 
       {/* ======================================================== */}
+      {/* MODUL 3: KELOLA & TAMBAH BUKU BARU (STAFF BOOK MANAGEMENT) */}
+      {/* ======================================================== */}
+      {activeModule === 'books' && (
+        <div>
+          <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div>
+              <h1 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <BookOpen size={26} color="#10b981" /> Manajemen Katalog & Input Buku Baru
+              </h1>
+              <p>
+                Kelola koleksi buku perpustakaan. <strong>Tambah buku baru</strong>, unggah foto sampul fisik dari HP/PC, atau edit lokasi rak & stok.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button 
+                className="btn btn-secondary"
+                style={{ padding: '0.6rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                onClick={fetchBooks}
+                title="Segarkan daftar buku"
+              >
+                <RefreshCw size={15} className={loadingBooks ? 'spin' : ''} /> Segarkan
+              </button>
+
+              <button 
+                className="btn"
+                style={{ 
+                  background: 'linear-gradient(135deg, #059669, #10b981)', 
+                  border: 'none', 
+                  color: '#fff',
+                  fontWeight: '700',
+                  padding: '0.65rem 1.4rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 15px rgba(16, 185, 129, 0.35)'
+                }}
+                onClick={handleOpenAddBook}
+              >
+                <Plus size={18} /> + Tambah Buku Baru
+              </button>
+            </div>
+          </div>
+
+          {/* Filter & Pencarian Buku */}
+          <div style={{ 
+            display: 'flex', 
+            gap: '1rem', 
+            marginBottom: '1.5rem', 
+            flexWrap: 'wrap', 
+            background: 'rgba(0,0,0,0.2)', 
+            padding: '1rem', 
+            borderRadius: '12px',
+            border: '1px solid var(--surface-border)'
+          }}>
+            <div style={{ flex: '1 1 250px', position: 'relative' }}>
+              <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input 
+                type="text" 
+                className="form-control"
+                style={{ paddingLeft: '2.5rem' }}
+                placeholder="Cari judul buku, nama pengarang, atau lokasi rak..."
+                value={bookSearch}
+                onChange={(e) => { setBookSearch(e.target.value); setBookPage(1); }}
+              />
+            </div>
+
+            <div style={{ flex: '0 1 220px' }}>
+              <select 
+                className="form-control"
+                value={bookCatFilter}
+                onChange={(e) => { setBookCatFilter(e.target.value); setBookPage(1); }}
+              >
+                <option value="all">Semua Kategori ({bookList.length})</option>
+                {Array.from(new Set(bookList.map(b => b.category).filter(Boolean))).map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Konten Daftar Buku */}
+          {loadingBooks ? (
+            <div style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+              <RefreshCw size={32} className="spin" style={{ margin: '0 auto 1rem auto', color: '#10b981' }} />
+              <p style={{ color: 'var(--text-muted)' }}>Memuat katalog buku...</p>
+            </div>
+          ) : (
+            <div>
+              {(() => {
+                const q = bookSearch.toLowerCase().trim();
+                const filtered = bookList.filter(b => {
+                  const matchCat = bookCatFilter === 'all' || b.category === bookCatFilter;
+                  const matchSearch = !q || 
+                    (b.title && b.title.toLowerCase().includes(q)) || 
+                    (b.author && b.author.toLowerCase().includes(q)) || 
+                    (b.shelf_location && b.shelf_location.toLowerCase().includes(q));
+                  return matchCat && matchSearch;
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div style={{ textAlign: 'center', padding: '3rem 1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '12px' }}>
+                      <AlertCircle size={40} style={{ color: 'var(--text-muted)', margin: '0 auto 0.6rem auto' }} />
+                      <p style={{ color: 'var(--text-muted)' }}>Tidak ada buku yang cocok dengan pencarian atau filter.</p>
+                      <button className="btn btn-secondary" style={{ marginTop: '0.8rem' }} onClick={() => { setBookSearch(''); setBookCatFilter('all'); }}>
+                        Reset Filter
+                      </button>
+                    </div>
+                  );
+                }
+
+                const totalPages = Math.ceil(filtered.length / booksPerPage);
+                const startIndex = (bookPage - 1) * booksPerPage;
+                const pageBooks = filtered.slice(startIndex, startIndex + booksPerPage);
+
+                return (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      <span>Menampilkan <strong>{pageBooks.length}</strong> dari <strong>{filtered.length}</strong> buku</span>
+                      <span>Halaman {bookPage} dari {totalPages || 1}</span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: '1.2rem' }}>
+                      {pageBooks.map(book => (
+                        <div 
+                          key={book.id}
+                          style={{
+                            background: 'rgba(255,255,255,0.03)',
+                            border: '1px solid var(--surface-border)',
+                            borderRadius: '12px',
+                            padding: '1rem',
+                            display: 'flex',
+                            gap: '1rem',
+                            position: 'relative',
+                            transition: 'transform 0.2s, border-color 0.2s',
+                          }}
+                        >
+                          {/* Thumbnail Cover */}
+                          <div style={{
+                            width: '85px',
+                            height: '115px',
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                            flexShrink: 0,
+                            background: '#1e293b',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            border: '1px solid rgba(255,255,255,0.1)'
+                          }}>
+                            {book.cover_url ? (
+                              <img 
+                                src={book.cover_url} 
+                                alt={book.title} 
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                              />
+                            ) : (
+                              <div style={{ textAlign: 'center', padding: '6px', fontSize: '0.7rem', color: '#94a3b8' }}>
+                                <BookOpen size={24} style={{ margin: '0 auto 4px auto', opacity: 0.6 }} />
+                                <span>No Cover</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Info Buku */}
+                          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, minWidth: 0 }}>
+                            <div>
+                              <div style={{ display: 'flex', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                                <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', fontWeight: '600' }}>
+                                  {book.category || 'Umum'}
+                                </span>
+                                {book.classification && (
+                                  <span style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#a5b4fc', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px' }}>
+                                    DDC {book.classification}
+                                  </span>
+                                )}
+                              </div>
+
+                              <h4 style={{ fontSize: '0.95rem', fontWeight: '700', marginBottom: '2px', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={book.title}>
+                                {book.title}
+                              </h4>
+                              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {book.author}
+                              </p>
+
+                              <div style={{ fontSize: '0.75rem', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <MapPin size={12} color="#f59e0b" />
+                                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{book.shelf_location || 'Rak Utama'}</span>
+                              </div>
+                            </div>
+
+                            {/* Stok & Tombol Aksi */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                              <span style={{ fontSize: '0.75rem', color: book.stock > 0 ? '#34d399' : '#f87171', fontWeight: '600' }}>
+                                Stok: {book.stock || 1}
+                              </span>
+
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ padding: '4px 8px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                  onClick={() => handleOpenEditBook(book)}
+                                  title="Edit data buku"
+                                >
+                                  <Edit3 size={13} /> Edit
+                                </button>
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ padding: '4px 8px', fontSize: '0.75rem', color: '#f87171', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                                  onClick={() => handleDeleteBook(book)}
+                                  title="Hapus buku dari katalog"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.8rem', marginTop: '2rem' }}>
+                        <button 
+                          className="btn btn-secondary" 
+                          disabled={bookPage <= 1}
+                          onClick={() => setBookPage(p => Math.max(1, p - 1))}
+                          style={{ padding: '0.5rem 1rem' }}
+                        >
+                          ← Sebelumnya
+                        </button>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                          Halaman <strong>{bookPage}</strong> dari <strong>{totalPages}</strong>
+                        </span>
+                        <button 
+                          className="btn btn-secondary" 
+                          disabled={bookPage >= totalPages}
+                          onClick={() => setBookPage(p => Math.min(totalPages, p + 1))}
+                          style={{ padding: '0.5rem 1rem' }}
+                        >
+                          Selanjutnya →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ======================================================== */}
       {/* MODAL 1: TULIS PENGUMUMAN BARANG BARU (TEKS SAJA) */}
       {/* ======================================================== */}
       {showCreateModal && (
@@ -1662,6 +2145,285 @@ function StaffDashboard() {
             >
               Tutup
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL 4: INPUT & EDIT BUKU BARU (DENGAN UPLOAD FOTO HP) */}
+      {/* ======================================================== */}
+      {showBookModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.82)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: 'var(--surface-color)',
+            border: '1.5px solid rgba(16, 185, 129, 0.5)',
+            borderRadius: '16px',
+            padding: '1.8rem',
+            maxWidth: '620px',
+            width: '100%',
+            boxShadow: '0 25px 50px rgba(0,0,0,0.7)',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.2rem', borderBottom: '1px solid var(--surface-border)', paddingBottom: '0.8rem' }}>
+              <div>
+                <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '1px', color: '#10b981', fontWeight: '800' }}>
+                  {editingBookId ? '✏️ EDIT DATA BUKU' : '📚 INPUT BUKU BARU'}
+                </span>
+                <h2 style={{ fontSize: '1.3rem', color: 'var(--text-main)', marginTop: '2px' }}>
+                  {editingBookId ? 'Perbarui Informasi Buku' : 'Tambah Buku ke Koleksi Perpustakaan'}
+                </h2>
+              </div>
+              <button 
+                onClick={() => setShowBookModal(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBook}>
+              {/* Judul & Pengarang */}
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px' }}>
+                  Judul Buku <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  placeholder="Contoh: Laskar Pelangi atau Belajar React & Node.js"
+                  required
+                  value={bookFormData.title}
+                  onChange={e => setBookFormData({ ...bookFormData, title: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px' }}>
+                  Nama Pengarang <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  placeholder="Contoh: Andrea Hirata atau Tere Liye"
+                  required
+                  value={bookFormData.author}
+                  onChange={e => setBookFormData({ ...bookFormData, author: e.target.value })}
+                />
+              </div>
+
+              {/* Kategori & Kode DDC */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px' }}>
+                    Kategori / Genre
+                  </label>
+                  <select 
+                    className="form-control"
+                    value={bookFormData.category}
+                    onChange={e => setBookFormData({ ...bookFormData, category: e.target.value })}
+                  >
+                    <option value="Sastra & Fiksi">Sastra & Fiksi</option>
+                    <option value="Novel">Novel</option>
+                    <option value="Teknologi & Manajemen">Teknologi & Manajemen</option>
+                    <option value="Komputer & Informasi">Komputer & Informasi</option>
+                    <option value="Sains & Matematika">Sains & Matematika</option>
+                    <option value="Ilmu Sosial & Pendidikan">Ilmu Sosial & Pendidikan</option>
+                    <option value="Filsafat & Psikologi">Filsafat & Psikologi</option>
+                    <option value="Agama">Agama</option>
+                    <option value="Kesenian & Desain">Kesenian & Desain</option>
+                    <option value="Sejarah & Geografi">Sejarah & Geografi</option>
+                    <option value="Bahasa">Bahasa</option>
+                    <option value="Koleksi Umum">Koleksi Umum</option>
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px' }}>
+                    Kode Klasifikasi (DDC)
+                  </label>
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    placeholder="Contoh: 813 atau 004"
+                    value={bookFormData.classification}
+                    onChange={e => setBookFormData({ ...bookFormData, classification: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Lokasi Rak & Stok */}
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem', marginBottom: '1.2rem' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px' }}>
+                    Lokasi Rak Fisik di Perpustakaan
+                  </label>
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    placeholder="Contoh: Lemari 3, Rak 2 atau Rak 800"
+                    value={bookFormData.shelf_location}
+                    onChange={e => setBookFormData({ ...bookFormData, shelf_location: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px' }}>
+                    Jumlah Stok
+                  </label>
+                  <input 
+                    type="number" 
+                    min="1"
+                    className="form-control" 
+                    value={bookFormData.stock}
+                    onChange={e => setBookFormData({ ...bookFormData, stock: parseInt(e.target.value) || 1 })}
+                  />
+                </div>
+              </div>
+
+              {/* Upload Foto Sampul */}
+              <div style={{ 
+                background: 'rgba(0,0,0,0.25)', 
+                padding: '1rem', 
+                borderRadius: '12px', 
+                border: '1px dashed rgba(255,255,255,0.15)',
+                marginBottom: '1.5rem'
+              }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#fff' }}>
+                  📸 Foto Sampul Buku (Pilih Salah Satu Cara)
+                </label>
+
+                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.8rem' }}>
+                  {/* Tombol Ambil Foto / File */}
+                  <label 
+                    className="btn btn-secondary" 
+                    style={{ 
+                      cursor: 'pointer', 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '6px',
+                      padding: '0.55rem 1rem',
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    <Camera size={16} color="#34d399" />
+                    <span>Upload Foto / Jepret Kamera HP</span>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      style={{ display: 'none' }} 
+                      onChange={handleCoverFileUpload}
+                    />
+                  </label>
+
+                  {/* Tombol Cari Online */}
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary"
+                    style={{ padding: '0.55rem 1rem', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    onClick={handleSearchOnlineCover}
+                    disabled={isSearchingOnline}
+                  >
+                    <Sparkles size={16} color="#818cf8" />
+                    <span>{isSearchingOnline ? 'Mencari...' : 'Cari Cover Online'}</span>
+                  </button>
+                </div>
+
+                {/* Preview Sampul Jika Ada */}
+                {coverPreview ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.6rem', padding: '0.6rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                    <img 
+                      src={coverPreview} 
+                      alt="Preview Sampul" 
+                      style={{ width: '60px', height: '80px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.2)' }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: '0.8rem', color: '#34d399', fontWeight: '600', display: 'block' }}>
+                        ✓ Foto sampul siap dipasang
+                      </span>
+                      <button 
+                        type="button" 
+                        style={{ background: 'none', border: 'none', color: '#f87171', fontSize: '0.75rem', cursor: 'pointer', padding: 0, marginTop: '4px' }}
+                        onClick={() => {
+                          setCoverPreview('');
+                          setBookFormData(prev => ({ ...prev, cover_url: '', cover_image: null }));
+                        }}
+                      >
+                        Hapus Foto
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                    💡 Tips: Jika Anda membuka Dashboard Staf ini di HP, klik <strong>"Upload Foto / Jepret Kamera HP"</strong> untuk langsung memotret sampul buku fisik dengan kamera smartphone.
+                  </p>
+                )}
+
+                {/* Hasil Rekomendasi Sampul Online Jika Ditemukan */}
+                {onlineCoverResults.length > 0 && (
+                  <div style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.8rem' }}>
+                    <p style={{ fontSize: '0.8rem', fontWeight: '600', color: '#a5b4fc', marginBottom: '8px' }}>
+                      Pilih salah satu sampul yang ditemukan dari internet:
+                    </p>
+                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '6px' }}>
+                      {onlineCoverResults.map((c, idx) => (
+                        <div 
+                          key={idx}
+                          style={{
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                            border: coverPreview === c.cover_url ? '2px solid #10b981' : '1px solid rgba(255,255,255,0.2)',
+                            borderRadius: '6px',
+                            overflow: 'hidden'
+                          }}
+                          onClick={() => handleSelectOnlineCover(c.cover_url)}
+                          title={`Pilih: ${c.title}`}
+                        >
+                          <img src={c.cover_url} alt={c.title} style={{ width: '65px', height: '90px', objectFit: 'cover' }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Tombol Simpan & Batal */}
+              <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'flex-end' }}>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary"
+                  onClick={() => setShowBookModal(false)}
+                  disabled={isSubmittingBook}
+                >
+                  Batal
+                </button>
+
+                <button 
+                  type="submit" 
+                  className="btn"
+                  style={{ 
+                    background: 'linear-gradient(135deg, #059669, #10b981)', 
+                    border: 'none', 
+                    color: '#fff', 
+                    fontWeight: '700',
+                    padding: '0.65rem 1.6rem'
+                  }}
+                  disabled={isSubmittingBook}
+                >
+                  {isSubmittingBook ? 'Menyimpan...' : (editingBookId ? '💾 Simpan Perubahan' : '💾 Simpan Buku ke Katalog')}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
