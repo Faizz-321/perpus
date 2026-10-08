@@ -201,8 +201,9 @@ async function mergeAllBooks() {
     }
   }
 
-  const finalBooks = Array.from(combinedMap.values());
-  console.log(`📊 Total koleksi buku akhir: ${finalBooks.length} buku.`);
+  // 4. Hanya simpan buku yang MEMILIKI FOTO SAMPUL ASLI (hilangkan yang belum ada sampul)
+  const finalBooks = Array.from(combinedMap.values()).filter(b => b.cover_url && b.cover_url.trim() !== '');
+  console.log(`📊 Total koleksi buku dengan foto sampul: ${finalBooks.length} buku.`);
 
   // 5. Simpan ke database MySQL bibliotech_db
   console.log('💾 Menyimpan seluruh data buku ke database MySQL (bibliotech_db)...');
@@ -215,9 +216,7 @@ async function mergeAllBooks() {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `;
 
-  let totalCovers = 0;
   for (const b of finalBooks) {
-    if (b.cover_url) totalCovers++;
     await appConn.execute(insertQuery, [
       b.title,
       b.author,
@@ -231,8 +230,8 @@ async function mergeAllBooks() {
 
   console.log('========================================================');
   console.log(`🎉 SUKSES BESAR!`);
-  console.log(`📚 Total Buku di Katalog: ${finalBooks.length} buku`);
-  console.log(`🖼️ Total Buku dengan FOTO SAMPUL ASLI: ${totalCovers} buku!`);
+  console.log(`📚 Total Buku di Katalog (100% Bersampul): ${finalBooks.length} buku`);
+  console.log(`🖼️ Seluruh buku di sistem kini memiliki FOTO SAMPUL ASLI!`);
   console.log(`📸 Semua file gambar yang ada di folder public/covers telah terpasang ke bukunya masing-masing.`);
   console.log('========================================================\n');
 
