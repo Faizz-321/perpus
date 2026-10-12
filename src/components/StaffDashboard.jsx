@@ -2,15 +2,21 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Clock, Search, CheckCircle, PackageCheck, RefreshCw, Database, Ticket, Check, 
   Filter, Volume2, VolumeX, BellRing, Trash2, Package, Camera, Upload, Eye, X, 
-  AlertCircle, Plus, User, CheckCircle2, Phone, MapPin, MessageCircle 
+  AlertCircle, Plus, User, CheckCircle2, Phone, MapPin, MessageCircle, BookPlus,
+  ShieldCheck, Sparkles, Menu, ChevronDown 
 } from 'lucide-react';
 import { announceTableOrder } from '../utils/soundAnnouncement';
 import { useModal } from '../context/ModalContext';
+import BulkBookImport from './BulkBookImport';
 
 function StaffDashboard() {
   const { showAlert, showConfirm } = useModal();
   // Modul Aktif: 'orders' (Pesanan Buku Meja) atau 'lost_found' (Barang Tertinggal)
   const [activeModule, setActiveModule] = useState('orders');
+  // State menu filter & modul khusus mobile (HANYA tombol 3 garis di layar HP)
+  const [mobileModuleMenuOpen, setMobileModuleMenuOpen] = useState(false);
+  const [mobileOrdersMenuOpen, setMobileOrdersMenuOpen] = useState(false);
+  const [mobileLfMenuOpen, setMobileLfMenuOpen] = useState(false);
 
   // ========================================================
   // STATE PESANAN BUKU MEJA
@@ -248,9 +254,9 @@ function StaffDashboard() {
       }
     } catch (err) {
       console.warn('Gagal akses webcam:', err);
-      showAlert('Tidak dapat mengakses kamera secara langsung. Silakan gunakan tombol "Pilih dari Galeri / File Foto" di bawah.', {
+      showAlert('Browser HP membatasi streaming kamera di jaringan HTTP (bukan HTTPS). Silakan tekan tombol hijau "Jepret Kamera HP / Pilih Galeri" di bawah untuk langsung memotret dari kamera HP Anda!', {
         type: 'warning',
-        title: 'Kamera Tidak Tersedia'
+        title: 'Gunakan Kamera HP / Galeri'
       });
       setIsCameraActive(false);
     }
@@ -379,77 +385,216 @@ function StaffDashboard() {
   const totalActiveLf = staffFoundItems.length + userReportItems.length;
 
   return (
-    <div className="glass-panel">
+    <div className="glass-panel" style={{ padding: '1.5rem' }}>
       {/* ======================================================== */}
-      {/* SWITCHER MODUL UTAMA STAF (PESANAN BUKU vs BARANG TERTINGGAL) */}
+      {/* HEADER PORTAL PETUGAS PERPUSTAKAAN */}
       {/* ======================================================== */}
-      <div style={{ display: 'flex', gap: '0.8rem', marginBottom: '1.8rem', borderBottom: '1px solid var(--surface-border)', paddingBottom: '1rem', flexWrap: 'wrap' }}>
+      <div className="staff-portal-header">
+        <div className="staff-portal-info">
+          <div className="staff-portal-avatar">
+            <ShieldCheck size={26} />
+          </div>
+          <div className="staff-portal-title">
+            <h2>Portal Staf & Petugas Perpustakaan</h2>
+            <p>Pusat kontrol verifikasi tiket meja, arsip lost & found, dan pengadaan katalog buku otomatis</p>
+          </div>
+        </div>
+
+        <div className="staff-portal-status">
+          <span className="staff-status-dot"></span>
+          <span>{isDbConnected ? 'MySQL XAMPP Terhubung' : 'Mode Offline'}</span>
+        </div>
+      </div>
+
+      {/* ======================================================== */}
+      {/* SWITCHER MODUL UTAMA STAF (DESKTOP: GRID, MOBILE: 3-GARIS) */}
+      {/* ======================================================== */}
+      
+      {/* Desktop Only (Web): 3 Kartu Grid Modern - SAMA SEKALI TIDAK DIUBAH */}
+      <div className="staff-module-nav desktop-module-nav">
         <button
-          className={`btn ${activeModule === 'orders' ? '' : 'btn-secondary'}`}
-          style={{
-            padding: '0.65rem 1.4rem',
-            fontSize: '0.92rem',
-            fontWeight: '700',
-            background: activeModule === 'orders' ? 'var(--primary-color)' : '',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
+          type="button"
+          className={`staff-nav-btn ${activeModule === 'orders' ? 'active orders' : ''}`}
           onClick={() => setActiveModule('orders')}
         >
-          <Ticket size={18} /> Antrean Pesanan Buku Meja
-          <span style={{ 
-            background: activeModule === 'orders' ? 'rgba(255,255,255,0.25)' : 'rgba(99,102,241,0.25)', 
-            padding: '2px 8px', 
-            borderRadius: '12px', 
-            fontSize: '0.75rem' 
-          }}>
-            {counts.all}
-          </span>
+          <div className="staff-nav-btn-content">
+            <div className="staff-nav-icon">
+              <Ticket size={20} />
+            </div>
+            <div className="staff-nav-labels">
+              <span className="staff-nav-label-main">Antrean Pesanan Tiket</span>
+              <span className="staff-nav-label-sub">Panggilan meja & verifikasi</span>
+            </div>
+          </div>
+          <span className="staff-nav-badge">{counts.all}</span>
         </button>
 
         <button
-          className={`btn ${activeModule === 'lost_found' ? '' : 'btn-secondary'}`}
-          style={{
-            padding: '0.65rem 1.4rem',
-            fontSize: '0.92rem',
-            fontWeight: '700',
-            background: activeModule === 'lost_found' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : '',
-            borderColor: activeModule === 'lost_found' ? '#f59e0b' : '',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            color: activeModule === 'lost_found' ? '#fff' : ''
-          }}
+          type="button"
+          className={`staff-nav-btn ${activeModule === 'lost_found' ? 'active lost_found' : ''}`}
           onClick={() => {
             setActiveModule('lost_found');
             fetchLostFound();
           }}
         >
-          <Package size={18} /> Kelola Barang Tertinggal & Laporan Pengunjung
-          <span style={{ 
-            background: activeModule === 'lost_found' ? 'rgba(0,0,0,0.3)' : 'rgba(245,158,11,0.25)', 
-            color: activeModule === 'lost_found' ? '#fff' : '#facc15',
-            padding: '2px 8px', 
-            borderRadius: '12px', 
-            fontSize: '0.75rem',
-            fontWeight: '800'
-          }}>
+          <div className="staff-nav-btn-content">
+            <div className="staff-nav-icon">
+              <Package size={20} />
+            </div>
+            <div className="staff-nav-labels">
+              <span className="staff-nav-label-main">Barang Tertinggal (Lost & Found)</span>
+              <span className="staff-nav-label-sub">Dokumentasi serah terima foto</span>
+            </div>
+          </div>
+          <span className="staff-nav-badge" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             {totalActiveLf}
+            {userReportItems.length > 0 && (
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }} title={`${userReportItems.length} laporan kehilangan baru`} />
+            )}
           </span>
-          {userReportItems.length > 0 && (
-            <span style={{
-              background: '#ef4444',
-              color: '#fff',
-              fontSize: '0.72rem',
-              fontWeight: '800',
-              padding: '2px 7px',
-              borderRadius: '10px'
-            }} title={`${userReportItems.length} laporan kehilangan baru dari pengunjung`}>
-              {userReportItems.length} Laporan Pengunjung
-            </span>
-          )}
         </button>
+
+        <button
+          type="button"
+          className={`staff-nav-btn ${activeModule === 'import_books' ? 'active import_books' : ''}`}
+          onClick={() => setActiveModule('import_books')}
+        >
+          <div className="staff-nav-btn-content">
+            <div className="staff-nav-icon">
+              <BookPlus size={20} />
+            </div>
+            <div className="staff-nav-labels">
+              <span className="staff-nav-label-main">Tambah Buku dari PDF</span>
+              <span className="staff-nav-label-sub">AI & OCR pencocok sampul acak</span>
+            </div>
+          </div>
+          <span className="staff-nav-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            <Sparkles size={12} color="#34d399" /> Otomatis
+          </span>
+        </button>
+      </div>
+
+      {/* Mobile Only: HANYA Tombol Garis 3 (Hamburger Dropdown - Bebas Scroll Samping) */}
+      <div className="mobile-module-container">
+        <button
+          type="button"
+          className="mobile-hamburger-btn mobile-module-trigger-btn"
+          onClick={() => {
+            setMobileModuleMenuOpen(!mobileModuleMenuOpen);
+            setMobileOrdersMenuOpen(false);
+            setMobileLfMenuOpen(false);
+          }}
+          aria-expanded={mobileModuleMenuOpen}
+          title="Pilih Modul Staf"
+        >
+          <div className="mobile-hamburger-btn-left">
+            <div className="mobile-hamburger-icon">
+              <span className="bar" />
+              <span className="bar" />
+              <span className="bar" />
+            </div>
+            <span className="mobile-hamburger-active-label" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              {activeModule === 'orders' && (
+                <>
+                  <Ticket size={16} color="#818cf8" />
+                  <span>Antrean Tiket ({counts.all})</span>
+                </>
+              )}
+              {activeModule === 'lost_found' && (
+                <>
+                  <Package size={16} color="#f59e0b" />
+                  <span>Barang Tertinggal ({totalActiveLf})</span>
+                  {userReportItems.length > 0 && (
+                    <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#ef4444' }} />
+                  )}
+                </>
+              )}
+              {activeModule === 'import_books' && (
+                <>
+                  <BookPlus size={16} color="#34d399" />
+                  <span>Tambah Buku PDF</span>
+                  <span style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(52, 211, 153, 0.2)', color: '#34d399', fontWeight: 700 }}>AI</span>
+                </>
+              )}
+            </span>
+          </div>
+          <ChevronDown size={15} className={`mobile-hamburger-chevron ${mobileModuleMenuOpen ? 'open' : ''}`} />
+        </button>
+
+        {mobileModuleMenuOpen && (
+          <>
+            <div className="mobile-dropdown-backdrop" onClick={() => setMobileModuleMenuOpen(false)} />
+            <div className="mobile-filter-dropdown mobile-module-dropdown">
+              <button
+                type="button"
+                className={`mobile-filter-option ${activeModule === 'orders' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveModule('orders');
+                  setMobileModuleMenuOpen(false);
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ticket size={16} color="#818cf8" />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span className="mobile-filter-text" style={{ fontWeight: 700 }}>Antrean Pesanan Tiket</span>
+                    <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Panggilan meja & verifikasi</span>
+                  </div>
+                </div>
+                <span className="mobile-filter-badge">{counts.all}</span>
+              </button>
+
+              <button
+                type="button"
+                className={`mobile-filter-option ${activeModule === 'lost_found' ? 'active lost_found' : ''}`}
+                onClick={() => {
+                  setActiveModule('lost_found');
+                  fetchLostFound();
+                  setMobileModuleMenuOpen(false);
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Package size={16} color="#f59e0b" />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span className="mobile-filter-text" style={{ fontWeight: 700 }}>Barang Tertinggal (Lost & Found)</span>
+                    <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Dokumentasi serah terima foto</span>
+                  </div>
+                </div>
+                <span className="mobile-filter-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  {totalActiveLf}
+                  {userReportItems.length > 0 && (
+                    <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#ef4444' }} />
+                  )}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className={`mobile-filter-option ${activeModule === 'import_books' ? 'active import_books' : ''}`}
+                onClick={() => {
+                  setActiveModule('import_books');
+                  setMobileModuleMenuOpen(false);
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <BookPlus size={16} color="#34d399" />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span className="mobile-filter-text" style={{ fontWeight: 700 }}>Tambah Buku dari PDF</span>
+                    <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>AI & OCR pencocok sampul acak</span>
+                  </div>
+                </div>
+                <span className="mobile-filter-badge" style={{ color: '#34d399', background: 'rgba(52, 211, 153, 0.15)', border: '1px solid rgba(52, 211, 153, 0.3)', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                  <Sparkles size={11} color="#34d399" /> Otomatis
+                </span>
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ======================================================== */}
@@ -457,153 +602,164 @@ function StaffDashboard() {
       {/* ======================================================== */}
       {activeModule === 'orders' && (
         <div>
-          <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-            <div>
-              <h1>Dashboard Staf (Verifikasi Tiket)</h1>
-              <p>Kelola dan verifikasi <strong>Kode Tiket</strong> pesanan buku dari pengunjung meja</p>
-            </div>
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
-              <button 
-                className="btn btn-secondary" 
-                style={{ 
-                  padding: '0.45rem 0.8rem', 
-                  fontSize: '0.82rem', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '6px',
-                  borderColor: soundEnabled ? 'rgba(16, 185, 129, 0.4)' : ''
-                }} 
-                onClick={() => setSoundEnabled(!soundEnabled)}
-                title={soundEnabled ? "Klik untuk membisukan pengumuman suara" : "Klik untuk mengaktifkan pengumuman suara"}
-              >
-                {soundEnabled ? <Volume2 size={15} color="var(--success)" /> : <VolumeX size={15} color="#f87171" />}
-                {soundEnabled ? 'Speaker Aktif' : 'Speaker Bisu'}
-              </button>
-
-              <button 
-                className="btn btn-secondary" 
-                style={{ padding: '0.45rem 0.8rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }} 
-                onClick={() => announceTableOrder('Meja 3', 'TKT-1003')}
-                title="Klik untuk mendengarkan contoh suara panggilan"
-              >
-                <BellRing size={15} color="var(--primary-color)" /> Uji Suara
-              </button>
-
-              <span 
-                className="status-badge" 
-                style={{ 
-                  background: isDbConnected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                  color: isDbConnected ? 'var(--success)' : 'var(--warning)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <Database size={13} />
-                {isDbConnected ? 'MySQL XAMPP' : 'Mode Offline'}
-              </span>
-
-              <button 
-                className="btn btn-secondary" 
-                style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem' }} 
-                onClick={fetchOrders}
-                title="Refresh Data"
-              >
-                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
-              </button>
-            </div>
-          </div>
-
-          {/* Bar Pencarian Cepat Kode Tiket & Meja */}
-          <div style={{ marginBottom: '1.2rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <div style={{ position: 'relative', flex: 1, maxWidth: '450px' }}>
-              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input 
-                type="text" 
-                className="form-control" 
-                placeholder="Ketik Kode Tiket (misal: 3714), Nomor Meja, atau Judul..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ paddingLeft: '2.5rem' }}
-              />
-            </div>
-            {searchQuery && (
-              <button 
-                className="btn btn-secondary" 
-                style={{ padding: '0.5rem 0.8rem', fontSize: '0.8rem' }}
-                onClick={() => setSearchQuery('')}
-              >
-                Hapus Pencarian
-              </button>
-            )}
-          </div>
-
-          {/* Tab Filter Status */}
-          <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginRight: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Filter size={14} /> Filter:
-              </span>
-
+          {/* ======================================================== */}
+          {/* DECK KONTROL TERPADU: FILTER + CARI + AKSI CEPAT */}
+          {/* Tampilan ringkas, tenang, dan tidak ramai di mata */}
+          {/* ======================================================== */}
+          <div className={`orders-control-deck ${mobileOrdersMenuOpen ? 'menu-open' : ''}`}>
+            {/* Desktop Web: Segmented Tab Lengkap (5 Tombol) - HANYA DI DESKTOP */}
+            <div className="orders-filter-segment desktop-filter-segment" role="tablist" aria-label="Filter Status Antrean">
               {[
                 { key: 'all', label: 'Semua Pesanan', count: counts.all },
                 { key: 'in_progress', label: 'Perlu Diproses', count: counts.in_progress },
                 { key: 'ready', label: 'Siap Diambil', count: counts.ready },
-                { key: 'completed', label: 'Sudah Selesai', count: counts.completed },
+                { key: 'completed', label: 'Selesai', count: counts.completed },
                 { key: 'cancelled', label: 'Dibatalkan', count: counts.cancelled },
               ].map((tab) => {
                 const isActive = statusFilter === tab.key;
                 return (
                   <button
                     key={tab.key}
-                    className={`btn ${isActive ? '' : 'btn-secondary'}`}
-                    style={{
-                      padding: '0.35rem 0.8rem',
-                      fontSize: '0.82rem',
-                      background: isActive ? 'var(--primary-color)' : '',
-                      borderColor: isActive ? 'var(--primary-color)' : '',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                    }}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    className={`orders-segment-btn ${isActive ? 'active' : ''}`}
                     onClick={() => setStatusFilter(tab.key)}
                   >
                     <span>{tab.label}</span>
-                    <span
-                      style={{
-                        background: isActive ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)',
-                        padding: '1px 6px',
-                        borderRadius: '10px',
-                        fontSize: '0.72rem',
-                        fontWeight: '700',
-                      }}
-                    >
-                      {tab.count}
-                    </span>
+                    <span className="orders-segment-count">{tab.count}</span>
                   </button>
                 );
               })}
             </div>
 
-            {(counts.completed > 0 || counts.cancelled > 0) && (
+            {/* Mobile Only: HANYA Tombol Garis 3 (Hamburger Menu) */}
+            <div className="mobile-filter-container">
               <button
-                className="btn btn-secondary"
-                style={{
-                  padding: '0.35rem 0.8rem',
-                  fontSize: '0.8rem',
-                  color: '#f87171',
-                  borderColor: 'rgba(239, 68, 68, 0.35)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px'
+                type="button"
+                className="mobile-hamburger-btn"
+                onClick={() => {
+                  setMobileOrdersMenuOpen(!mobileOrdersMenuOpen);
+                  setMobileModuleMenuOpen(false);
                 }}
-                onClick={handleCleanupCompleted}
-                title="Bersihkan semua pesanan yang sudah selesai & dibatalkan agar antrean rapi"
+                aria-expanded={mobileOrdersMenuOpen}
+                title="Buka pilihan filter antrean"
               >
-                <Trash2 size={13} /> Bersihkan Selesai ({counts.completed + counts.cancelled})
+                <div className="mobile-hamburger-btn-left">
+                  <div className="mobile-hamburger-icon">
+                    <span className="bar" />
+                    <span className="bar" />
+                    <span className="bar" />
+                  </div>
+                  <span className="mobile-hamburger-active-label">
+                    {statusFilter === 'all' && `Semua Pesanan (${counts.all})`}
+                    {statusFilter === 'in_progress' && `Perlu Diproses (${counts.in_progress})`}
+                    {statusFilter === 'ready' && `Siap Diambil (${counts.ready})`}
+                    {statusFilter === 'completed' && `Selesai (${counts.completed})`}
+                    {statusFilter === 'cancelled' && `Dibatalkan (${counts.cancelled})`}
+                  </span>
+                </div>
+                <ChevronDown size={14} className={`mobile-hamburger-chevron ${mobileOrdersMenuOpen ? 'open' : ''}`} />
               </button>
-            )}
+
+              {mobileOrdersMenuOpen && (
+                <>
+                  <div className="mobile-dropdown-backdrop" onClick={() => setMobileOrdersMenuOpen(false)} />
+                  <div className="mobile-filter-dropdown">
+                    {[
+                      { key: 'all', label: 'Semua Pesanan', count: counts.all },
+                      { key: 'in_progress', label: 'Perlu Diproses', count: counts.in_progress },
+                      { key: 'ready', label: 'Siap Diambil', count: counts.ready },
+                      { key: 'completed', label: 'Selesai', count: counts.completed },
+                      { key: 'cancelled', label: 'Dibatalkan', count: counts.cancelled },
+                    ].map((tab) => {
+                      const isActive = statusFilter === tab.key;
+                      return (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          className={`mobile-filter-option ${isActive ? 'active' : ''}`}
+                          onClick={() => {
+                            setStatusFilter(tab.key);
+                            setMobileOrdersMenuOpen(false);
+                          }}
+                        >
+                          <span className="mobile-filter-text">{tab.label}</span>
+                          <span className="mobile-filter-badge">{tab.count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Sisi Kanan: Pencarian Ringkas & Utilitas Suara/Refresh */}
+            <div className="orders-actions-cluster">
+              <div className="orders-search-box">
+                <Search size={14} className="orders-search-icon" />
+                <input 
+                  type="text" 
+                  className="orders-search-input" 
+                  placeholder="Cari tiket, meja, judul..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button 
+                    type="button"
+                    className="orders-search-clear"
+                    onClick={() => setSearchQuery('')}
+                    title="Hapus pencarian"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              <div className="orders-utility-group">
+                <button 
+                  type="button"
+                  className={`orders-utility-btn ${soundEnabled ? 'active-audio' : 'muted-audio'}`} 
+                  onClick={() => setSoundEnabled(!soundEnabled)}
+                  title={soundEnabled ? "Speaker Aktif (klik untuk senyapkan pengumuman)" : "Speaker Senyap (klik untuk nyalakan)"}
+                >
+                  {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
+                  <span className="utility-label">{soundEnabled ? 'Suara ON' : 'Mute'}</span>
+                </button>
+
+                <button 
+                  type="button"
+                  className="orders-utility-btn" 
+                  onClick={() => announceTableOrder('Meja 3', 'TKT-1003')}
+                  title="Klik untuk tes suara pengumuman meja"
+                >
+                  <BellRing size={15} />
+                  <span className="utility-label">Tes Suara</span>
+                </button>
+
+                <button 
+                  type="button"
+                  className="orders-utility-btn orders-refresh-btn" 
+                  onClick={fetchOrders}
+                  title="Segarkan antrean pesanan"
+                >
+                  <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                </button>
+
+                {(counts.completed > 0 || counts.cancelled > 0) && (
+                  <button
+                    type="button"
+                    className="orders-utility-btn danger"
+                    onClick={handleCleanupCompleted}
+                    title="Bersihkan pesanan selesai & dibatalkan agar antrean tetap ringkas"
+                  >
+                    <Trash2 size={13} />
+                    <span className="utility-label">Bersihkan ({counts.completed + counts.cancelled})</span>
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Grid Kartu Pesanan Buku */}
@@ -752,114 +908,151 @@ function StaffDashboard() {
       {/* ======================================================== */}
       {activeModule === 'lost_found' && (
         <div>
-          {/* Header Modul Lost & Found */}
-          <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
-            <div>
-              <h1 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Package size={26} color="#f59e0b" /> Pencatatan Barang Tertinggal
-              </h1>
-              <p>
-                Tulis pengumuman barang yang ditemukan staf di meja belajar, dan <strong>ambil foto orangnya saat serah terima</strong> sebagai bukti sah.
-              </p>
+          {/* ======================================================== */}
+          {/* DECK KONTROL LOST & FOUND: TAB KATEGORI + AKSI CEPAT */}
+          {/* ======================================================== */}
+          <div className={`orders-control-deck ${mobileLfMenuOpen ? 'menu-open' : ''}`}>
+            {/* Desktop Web: Segmented Tab Lengkap (3 Tombol) - HANYA DI DESKTOP */}
+            <div className="orders-filter-segment desktop-filter-segment" role="tablist" aria-label="Kategori Barang Tertinggal">
+              <button
+                type="button"
+                className={`orders-segment-btn ${lfTab === 'found' ? 'active' : ''}`}
+                style={{
+                  background: lfTab === 'found' ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.35), rgba(217, 119, 6, 0.45))' : '',
+                  borderColor: lfTab === 'found' ? 'rgba(245, 158, 11, 0.5)' : 'transparent',
+                  color: lfTab === 'found' ? '#fff' : '#f59e0b'
+                }}
+                onClick={() => setLfTab('found')}
+              >
+                <Package size={15} />
+                <span>Ditemukan Staf</span>
+                <span className="orders-segment-count">{staffFoundItems.length}</span>
+              </button>
+
+              <button
+                type="button"
+                className={`orders-segment-btn ${lfTab === 'user_reports' ? 'active' : ''}`}
+                style={{
+                  background: lfTab === 'user_reports' ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(79, 70, 229, 0.45))' : '',
+                  borderColor: lfTab === 'user_reports' ? 'rgba(129, 140, 248, 0.5)' : 'transparent',
+                  color: lfTab === 'user_reports' ? '#fff' : '#818cf8'
+                }}
+                onClick={() => setLfTab('user_reports')}
+              >
+                <User size={15} />
+                <span>Laporan Pengunjung</span>
+                <span className="orders-segment-count">{userReportItems.length}</span>
+              </button>
+
+              <button
+                type="button"
+                className={`orders-segment-btn ${lfTab === 'claimed' ? 'active' : ''}`}
+                style={{
+                  background: lfTab === 'claimed' ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.35), rgba(5, 150, 105, 0.45))' : '',
+                  borderColor: lfTab === 'claimed' ? 'rgba(52, 211, 153, 0.5)' : 'transparent',
+                  color: lfTab === 'claimed' ? '#fff' : '#34d399'
+                }}
+                onClick={() => setLfTab('claimed')}
+              >
+                <CheckCircle2 size={15} />
+                <span>Riwayat Diserahkan</span>
+                <span className="orders-segment-count">{claimedLf.length}</span>
+              </button>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
-              <button 
+            {/* Mobile Only: HANYA Tombol Garis 3 (Hamburger Menu) */}
+            <div className="mobile-filter-container">
+              <button
+                type="button"
+                className="mobile-hamburger-btn"
+                onClick={() => {
+                  setMobileLfMenuOpen(!mobileLfMenuOpen);
+                  setMobileModuleMenuOpen(false);
+                }}
+                aria-expanded={mobileLfMenuOpen}
+                title="Buka pilihan kategori barang"
+              >
+                <div className="mobile-hamburger-btn-left">
+                  <div className="mobile-hamburger-icon">
+                    <span className="bar" />
+                    <span className="bar" />
+                    <span className="bar" />
+                  </div>
+                  <span className="mobile-hamburger-active-label">
+                    {lfTab === 'found' && `Ditemukan Staf (${staffFoundItems.length})`}
+                    {lfTab === 'user_reports' && `Laporan Pengunjung (${userReportItems.length})`}
+                    {lfTab === 'claimed' && `Riwayat Diserahkan (${claimedLf.length})`}
+                  </span>
+                </div>
+                <ChevronDown size={14} className={`mobile-hamburger-chevron ${mobileLfMenuOpen ? 'open' : ''}`} />
+              </button>
+
+              {mobileLfMenuOpen && (
+                <>
+                  <div className="mobile-dropdown-backdrop" onClick={() => setMobileLfMenuOpen(false)} />
+                  <div className="mobile-filter-dropdown">
+                    {[
+                      { key: 'found', label: 'Ditemukan Staf', icon: Package, count: staffFoundItems.length, color: '#f59e0b' },
+                      { key: 'user_reports', label: 'Laporan Pengunjung', icon: User, count: userReportItems.length, color: '#818cf8' },
+                      { key: 'claimed', label: 'Riwayat Diserahkan', icon: CheckCircle2, count: claimedLf.length, color: '#34d399' },
+                    ].map((tab) => {
+                      const isActive = lfTab === tab.key;
+                      const IconComp = tab.icon;
+                      return (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          className={`mobile-filter-option ${isActive ? 'active lost_found' : ''}`}
+                          onClick={() => {
+                            setLfTab(tab.key);
+                            setMobileLfMenuOpen(false);
+                          }}
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                            <IconComp size={15} color={tab.color} />
+                            <span className="mobile-filter-text">{tab.label}</span>
+                          </span>
+                          <span className="mobile-filter-badge">{tab.count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Sisi Kanan: Aksi Baru & Refresh */}
+            <div className="orders-actions-cluster">
+              <button
+                type="button"
                 className="btn"
-                style={{ 
-                  background: 'linear-gradient(135deg, #f59e0b, #d97706)', 
-                  border: 'none', 
+                style={{
+                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                  border: 'none',
                   color: '#fff',
                   fontWeight: '700',
-                  padding: '0.6rem 1.2rem',
-                  display: 'flex',
+                  padding: '0.45rem 1rem',
+                  fontSize: '0.82rem',
+                  display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px',
-                  boxShadow: '0 4px 14px rgba(245, 158, 11, 0.4)'
+                  borderRadius: '9px',
+                  boxShadow: '0 2px 10px rgba(245, 158, 11, 0.35)'
                 }}
                 onClick={() => setShowCreateModal(true)}
               >
-                <Plus size={18} /> + Tulis Pengumuman Barang Baru
+                <Plus size={15} /> + Pengumuman Barang
               </button>
 
-              <button 
-                className="btn btn-secondary" 
-                style={{ padding: '0.55rem 0.9rem' }}
+              <button
+                type="button"
+                className="orders-utility-btn"
                 onClick={fetchLostFound}
-                title="Refresh Data"
+                title="Segarkan data lost & found"
               >
-                <RefreshCw size={15} className={loadingLf ? 'animate-spin' : ''} />
+                <RefreshCw size={14} className={loadingLf ? 'animate-spin' : ''} />
               </button>
             </div>
-          </div>
-
-          {/* Sub Tab: Ditemukan Staf vs Laporan Pengguna vs Riwayat Selesai */}
-          <div style={{ display: 'flex', gap: '0.8rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-            <button
-              className={`btn ${lfTab === 'found' ? '' : 'btn-secondary'}`}
-              style={{
-                background: lfTab === 'found' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : '',
-                borderColor: lfTab === 'found' ? 'transparent' : 'rgba(245, 158, 11, 0.4)',
-                color: lfTab === 'found' ? '#fff' : '#f59e0b',
-                padding: '0.55rem 1.2rem',
-                fontSize: '0.88rem',
-                fontWeight: '700',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-              onClick={() => setLfTab('found')}
-            >
-              <Package size={17} /> 🏢 Ditemukan Staf ({staffFoundItems.length})
-            </button>
-
-            <button
-              className={`btn ${lfTab === 'user_reports' ? '' : 'btn-secondary'}`}
-              style={{
-                background: lfTab === 'user_reports' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : '',
-                borderColor: lfTab === 'user_reports' ? 'transparent' : 'rgba(99, 102, 241, 0.4)',
-                color: lfTab === 'user_reports' ? '#fff' : '#818cf8',
-                padding: '0.55rem 1.2rem',
-                fontSize: '0.88rem',
-                fontWeight: '700',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-              onClick={() => setLfTab('user_reports')}
-            >
-              <User size={17} /> 👤 Laporan Pengunjung ({userReportItems.length})
-              {userReportItems.length > 0 && (
-                <span style={{ 
-                  background: lfTab === 'user_reports' ? '#fff' : '#ef4444', 
-                  color: lfTab === 'user_reports' ? '#4f46e5' : '#fff', 
-                  padding: '1px 6px', 
-                  borderRadius: '10px', 
-                  fontSize: '0.72rem', 
-                  fontWeight: '800' 
-                }}>
-                  {userReportItems.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              className={`btn ${lfTab === 'claimed' ? '' : 'btn-secondary'}`}
-              style={{
-                background: lfTab === 'claimed' ? 'linear-gradient(135deg, #10b981, #059669)' : '',
-                borderColor: lfTab === 'claimed' ? 'transparent' : 'rgba(16, 185, 129, 0.4)',
-                color: lfTab === 'claimed' ? '#fff' : '#34d399',
-                padding: '0.55rem 1.2rem',
-                fontSize: '0.88rem',
-                fontWeight: '700',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-              onClick={() => setLfTab('claimed')}
-            >
-              <CheckCircle2 size={17} /> ✅ Riwayat Sudah Diserahkan ({claimedLf.length})
-            </button>
           </div>
 
           {/* Konten Tab 1: Barang yang Ditemukan Staf */}
@@ -1304,6 +1497,13 @@ function StaffDashboard() {
       )}
 
       {/* ======================================================== */}
+      {/* MODUL 3: TAMBAH BUKU DARI PDF (DAFTAR & SAMPUL CERDAS) */}
+      {/* ======================================================== */}
+      {activeModule === 'import_books' && (
+        <BulkBookImport />
+      )}
+
+      {/* ======================================================== */}
       {/* MODAL 1: TULIS PENGUMUMAN BARANG BARU (TEKS SAJA) */}
       {/* ======================================================== */}
       {showCreateModal && (
@@ -1547,28 +1747,38 @@ function StaffDashboard() {
                   </p>
 
                   <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      className="btn"
-                      style={{ background: 'var(--primary-color)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-                      onClick={startCamera}
-                    >
-                      <Camera size={16} /> Buka Kamera (Jepret Langsung)
-                    </button>
-
                     <label 
-                      className="btn btn-secondary" 
-                      style={{ fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      className="btn" 
+                      style={{ 
+                        fontSize: '0.85rem', 
+                        cursor: 'pointer', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '6px',
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        color: '#ffffff',
+                        fontWeight: '700',
+                        boxShadow: '0 2px 10px rgba(16, 185, 129, 0.35)'
+                      }}
                     >
-                      <Upload size={16} /> Pilih dari Galeri / File
+                      <Camera size={16} /> 📷 Jepret Kamera HP / Pilih Galeri
                       <input 
                         type="file" 
                         accept="image/*" 
-                        capture="user" 
                         onChange={handleFileUpload} 
                         style={{ display: 'none' }} 
                       />
                     </label>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      onClick={startCamera}
+                      title="Gunakan webcam bawaan laptop/PC (hanya jika didukung HTTPS/localhost)"
+                    >
+                      <Camera size={15} /> Buka Webcam Laptop
+                    </button>
                   </div>
                 </div>
               )}

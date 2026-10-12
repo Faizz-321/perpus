@@ -14,16 +14,18 @@ USE `bibliotech_db`;
 -- ---------------------------------------------------
 CREATE TABLE IF NOT EXISTS `books` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `title` VARCHAR(255) NOT NULL,
-  `author` VARCHAR(255) NOT NULL,
-  `classification` VARCHAR(20) DEFAULT '813',
-  `category` VARCHAR(100) DEFAULT 'Novel',
-  `shelf_location` VARCHAR(100) DEFAULT 'Lemari 3, Rak 1',
+  `title` VARCHAR(500) NOT NULL,
+  `author` VARCHAR(500) NOT NULL,
+  `classification` VARCHAR(20) DEFAULT '000',
+  `category` VARCHAR(100) DEFAULT 'Koleksi Umum',
+  `shelf_location` VARCHAR(255) DEFAULT 'Rak Koleksi Utama',
   `stock` INT DEFAULT 1,
   `rating` DECIMAL(3,1) DEFAULT 4.5,
   `rating_count` INT DEFAULT 5,
   `read_count` INT DEFAULT 12,
   `cover_url` VARCHAR(500) DEFAULT NULL,
+  `isbn` VARCHAR(100) DEFAULT NULL,
+  `catalog_id` INT DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 

@@ -2,14 +2,24 @@ const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
+
+// Muat variabel dari backend/.env (opsional, misal GEMINI_API_KEY untuk pembaca sampul AI)
+try {
+  process.loadEnvFile(path.join(__dirname, '.env'));
+} catch {
+  // File .env tidak wajib ada
+}
+
+const COVERS_DIR = path.join(__dirname, '../public/covers');
 
 const app = express();
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '25mb' }));
-app.use(express.urlencoded({ limit: '25mb', extended: true }));
-app.use('/covers', express.static(path.join(__dirname, '../public/covers')));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use('/covers', express.static(COVERS_DIR));
 
 // Konfigurasi Koneksi Database MySQL (XAMPP Default)
 // Menggunakan createPool agar koneksi lebih stabil dan otomatis reconnect
@@ -33,7 +43,19 @@ pool.getConnection((err, connection) => {
   console.log('✅ Berhasil terhubung ke database MySQL (bibliotech_db) di XAMPP!');
   connection.release();
   initLostFoundTable();
+  initBooksExtraColumns();
 });
+
+// Tambah kolom penerbit & tahun terbit pada tabel books (untuk fitur import massal)
+function initBooksExtraColumns() {
+  const alterQueries = [
+    "ALTER TABLE books ADD COLUMN IF NOT EXISTS publisher VARCHAR(255) NULL",
+    "ALTER TABLE books ADD COLUMN IF NOT EXISTS publish_year VARCHAR(10) NULL"
+  ];
+  alterQueries.forEach(q => pool.query(q, (err) => {
+    if (err) console.warn('⚠️ Gagal menambah kolom books:', err.message);
+  }));
+}
 
 // Inisialisasi tabel lost_found & kolom bukti foto
 function initLostFoundTable() {
@@ -208,6 +230,7 @@ app.delete('/api/orders/:id', (req, res) => {
 // ------------------------------------------
 // FITUR 2: BOOKS (Katalog Buku & Rating)
 // ------------------------------------------
+// Ambil katalog buku
 app.get('/api/books', (req, res) => {
   const query = 'SELECT * FROM books ORDER BY id ASC';
   pool.query(query, (err, results) => {
@@ -216,6 +239,158 @@ app.get('/api/books', (req, res) => {
       return res.status(500).json({ error: 'Gagal mengambil katalog buku' });
     }
     res.json(results);
+  });
+});
+
+// Ambil statistik sampul buku (Lokal Folder, Online ISBN, CSS 3D)
+app.get('/api/books/cover-stats', (req, res) => {
+  const query = `
+    SELECT 
+      COUNT(*) as total_books,
+      COUNT(cover_url) as with_cover,
+      COUNT(CASE WHEN cover_url LIKE '/covers/isbn_%' THEN 1 END) as online_isbn_covers,
+      COUNT(CASE WHEN cover_url LIKE '/covers/%' AND cover_url NOT LIKE '/covers/isbn_%' THEN 1 END) as local_folder_covers,
+      COUNT(CASE WHEN cover_url IS NULL OR cover_url = '' THEN 1 END) as css_3d_covers
+    FROM books
+  `;
+  pool.query(query, (err, rows) => {
+    if (err) {
+      console.error('Error GET /api/books/cover-stats:', err);
+      return res.status(500).json({ error: 'Gagal mengambil statistik sampul' });
+    }
+    res.json(rows[0]);
+  });
+});
+
+// ------------------------------------------
+// FITUR 2B: IMPORT MASSAL BUKU (PDF Daftar Judul + PDF Sampul)
+// ------------------------------------------
+
+// Cek apakah pembaca sampul AI (Gemini) tersedia
+app.get('/api/books/import/ai-status', (req, res) => {
+  res.json({
+    gemini: Boolean(process.env.GEMINI_API_KEY),
+    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash'
+  });
+});
+
+// Baca teks judul & penulis dari gambar sampul menggunakan Gemini Vision
+app.post('/api/books/import/read-cover', async (req, res) => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return res.status(400).json({ error: 'GEMINI_API_KEY belum diatur di backend/.env' });
+  }
+
+  const { image } = req.body;
+  const match = typeof image === 'string' && image.match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/);
+  if (!match) {
+    return res.status(400).json({ error: 'Format gambar sampul tidak valid' });
+  }
+
+  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const prompt =
+    'Ini adalah foto/gambar sampul depan sebuah buku. Baca tulisan yang tercetak di sampul. ' +
+    'Kembalikan JSON dengan format {"title": "...", "author": "...", "other_text": "..."}. ' +
+    'title = judul utama buku, author = nama penulis/pengarang, other_text = tulisan lain (penerbit, subjudul). ' +
+    'Jika tidak terbaca, isi string kosong. Jangan menebak judul yang tidak tertulis.';
+
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: match[1], data: match[2] } }
+          ]
+        }],
+        generationConfig: { temperature: 0, responseMimeType: 'application/json' }
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data?.error?.message || `HTTP ${response.status}`);
+    }
+
+    const rawText = data?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '{}';
+    let parsed = {};
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      parsed = { title: '', author: '', other_text: rawText };
+    }
+
+    res.json({
+      title: parsed.title || '',
+      author: parsed.author || '',
+      text: [parsed.title, parsed.author, parsed.other_text].filter(Boolean).join('\n')
+    });
+  } catch (err) {
+    console.error('Error /api/books/import/read-cover:', err.message);
+    res.status(502).json({ error: 'Gagal membaca sampul dengan AI: ' + err.message });
+  }
+});
+
+// Simpan banyak buku sekaligus beserta gambar sampulnya
+app.post('/api/books/bulk-import', async (req, res) => {
+  const { books } = req.body;
+  if (!Array.isArray(books) || books.length === 0) {
+    return res.status(400).json({ error: 'Daftar buku kosong' });
+  }
+
+  if (!fs.existsSync(COVERS_DIR)) {
+    fs.mkdirSync(COVERS_DIR, { recursive: true });
+  }
+
+  const db = pool.promise();
+  const saved = [];
+  const failed = [];
+
+  for (let i = 0; i < books.length; i++) {
+    const b = books[i] || {};
+    const title = String(b.title || '').trim();
+    if (!title) {
+      failed.push({ index: i, error: 'Judul kosong' });
+      continue;
+    }
+
+    let coverUrl = null;
+    try {
+      const imgMatch = typeof b.cover_image === 'string' && b.cover_image.match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/);
+      if (imgMatch) {
+        const ext = imgMatch[1] === 'jpeg' ? 'jpg' : imgMatch[1];
+        const fileName = `upload_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        fs.writeFileSync(path.join(COVERS_DIR, fileName), Buffer.from(imgMatch[2], 'base64'));
+        coverUrl = `/covers/${fileName}`;
+      }
+
+      const [result] = await db.query(
+        `INSERT INTO books (title, author, publisher, publish_year, category, shelf_location, stock, cover_url, rating, rating_count, read_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0)`,
+        [
+          title.slice(0, 500),
+          (String(b.author || '').trim() || 'Tidak Diketahui').slice(0, 500),
+          String(b.publisher || '').trim() || null,
+          String(b.publish_year || '').trim().slice(0, 10) || null,
+          String(b.category || '').trim() || 'Koleksi Umum',
+          String(b.shelf_location || '').trim() || 'Rak Koleksi Utama',
+          Math.max(1, parseInt(b.stock, 10) || 1),
+          coverUrl
+        ]
+      );
+      saved.push({ index: i, id: result.insertId, title, cover_url: coverUrl });
+    } catch (err) {
+      console.error(`Error bulk-import buku "${title}":`, err.message);
+      failed.push({ index: i, title, error: err.message });
+    }
+  }
+
+  res.status(saved.length > 0 ? 201 : 500).json({
+    message: `${saved.length} buku berhasil disimpan${failed.length ? `, ${failed.length} gagal` : ''}.`,
+    saved,
+    failed
   });
 });
 
