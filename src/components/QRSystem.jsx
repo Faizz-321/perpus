@@ -238,7 +238,10 @@ function QRSystem() {
         }),
       });
 
-      const resData = await res.json();
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(resData.error || 'Gagal menyimpan pesanan ke server');
+      }
 
       const newOrder = {
         id: resData.orderId,
@@ -663,7 +666,6 @@ function QRSystem() {
                           alt={`Sampul ${book.title}`} 
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                           onLoad={(e) => {
-                            // OpenLibrary mengembalikan gambar 1x1 pixel transparan jika ISBN tidak ditemukan
                             if (e.target.naturalWidth <= 1) {
                               e.target.style.display = 'none';
                               if (e.target.nextSibling) {

@@ -14,9 +14,9 @@ USE `bibliotech_db`;
 -- ---------------------------------------------------
 CREATE TABLE IF NOT EXISTS `books` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `title` VARCHAR(255) NOT NULL,
-  `author` VARCHAR(255) NOT NULL,
-  `classification` VARCHAR(20) DEFAULT '813',
+  `title` VARCHAR(500) NOT NULL,
+  `author` VARCHAR(500) NOT NULL,
+  `classification` VARCHAR(50) DEFAULT '813',
   `category` VARCHAR(100) DEFAULT 'Novel',
   `shelf_location` VARCHAR(100) DEFAULT 'Lemari 3, Rak 1',
   `stock` INT DEFAULT 1,
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS `books` (
   `read_count` INT DEFAULT 12,
   `cover_url` VARCHAR(500) DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------
 -- 1.1 TABEL ULASAN & RATING BUKU (Book Ratings)
@@ -34,27 +34,46 @@ CREATE TABLE IF NOT EXISTS `book_ratings` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `book_id` INT NOT NULL,
   `rating` INT NOT NULL,
-  `review_text` VARCHAR(500) NULL,
-  `table_no` VARCHAR(50) NULL,
+  `review_text` TEXT NULL,
+  `table_no` VARCHAR(100) NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX `idx_book` (`book_id`)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------
 -- 2. TABEL ORDERS (Pesanan Pinjam Buku via Meja/QR)
 -- ---------------------------------------------------
 CREATE TABLE IF NOT EXISTS `orders` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `ticket_code` VARCHAR(30) NOT NULL,
-  `book_title` VARCHAR(255) NOT NULL,
-  `table_no` VARCHAR(50) NOT NULL,
+  `ticket_code` VARCHAR(50) NOT NULL,
+  `book_title` TEXT NOT NULL,
+  `table_no` VARCHAR(100) NOT NULL,
   `status` ENUM('pending', 'searching', 'ready', 'completed', 'cancelled') DEFAULT 'pending',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------
--- 3. TABEL RESERVASI MEJA (Table Booking)
+-- 3. TABEL STATUS MEJA & REAL-TIME OCCUPANCY
+-- ---------------------------------------------------
+CREATE TABLE IF NOT EXISTS `library_tables` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `table_number` VARCHAR(50) NOT NULL UNIQUE,
+  `zone` VARCHAR(100) NOT NULL DEFAULT 'Zona Baca Utama',
+  `capacity` INT DEFAULT 4,
+  `status` ENUM('available', 'occupied', 'reserved', 'maintenance') DEFAULT 'available',
+  `current_user_name` VARCHAR(255) NULL,
+  `occupied_at` DATETIME NULL,
+  `expected_checkout` DATETIME NULL,
+  `session_token` VARCHAR(100) NULL,
+  `pos_x` INT DEFAULT 0,
+  `pos_y` INT DEFAULT 0,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------
+-- 3.1 TABEL RESERVASI MEJA (Table Booking)
 -- ---------------------------------------------------
 CREATE TABLE IF NOT EXISTS `table_bookings` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -64,39 +83,50 @@ CREATE TABLE IF NOT EXISTS `table_bookings` (
   `end_time` TIME NOT NULL,
   `status` ENUM('booked', 'occupied', 'completed', 'cancelled') DEFAULT 'booked',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------
 -- 4. TABEL BARANG HILANG & TEMUAN (Lost & Found)
 -- ---------------------------------------------------
 CREATE TABLE IF NOT EXISTS `lost_found` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `item_name` VARCHAR(255) NOT NULL,
+  `item_name` VARCHAR(500) NOT NULL,
   `type` ENUM('found', 'lost') NOT NULL DEFAULT 'found',
-  `location` VARCHAR(255) NOT NULL,
+  `location` VARCHAR(500) NOT NULL,
   `description` TEXT NULL,
   `report_date` DATE NOT NULL,
-  `status` ENUM('unclaimed', 'claimed') DEFAULT 'unclaimed',
+  `status` VARCHAR(50) DEFAULT 'unclaimed',
   `claimed_by` VARCHAR(255) NULL,
   `claimed_at` DATETIME NULL,
   `proof_photo` LONGTEXT NULL,
-  `staff_notes` VARCHAR(255) NULL,
+  `staff_notes` VARCHAR(500) NULL,
   `contact` VARCHAR(100) DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ===================================================
--- DATA AWAL (SEED DATA UNTUK TESTING)
+-- DATA AWAL (SEED DATA CONTOH)
 -- ===================================================
 
--- Data Awal Buku
-INSERT INTO `books` (`title`, `author`, `category`, `stock`) VALUES
-('The Design of Everyday Things', 'Don Norman', 'Design', 3),
-('Clean Code', 'Robert C. Martin', 'Programming', 2),
-('Sapiens: A Brief History', 'Yuval Noah Harari', 'History', 4),
-('Atomic Habits', 'James Clear', 'Self Improvement', 5),
-('Refactoring', 'Martin Fowler', 'Programming', 2),
-('Thinking, Fast and Slow', 'Daniel Kahneman', 'Psychology', 3);
+-- Data Awal Status Meja Perpustakaan (library_tables)
+INSERT INTO `library_tables` (`table_number`, `zone`, `capacity`, `status`, `pos_x`, `pos_y`) VALUES
+('Meja 01', 'Zona Baca Utama', 4, 'available', 1, 1),
+('Meja 02', 'Zona Baca Utama', 4, 'occupied', 1, 2),
+('Meja 03', 'Zona Baca Utama', 4, 'available', 1, 3),
+('Meja 04', 'Zona Baca Utama', 4, 'occupied', 1, 4),
+('Meja 05', 'Zona Baca Utama', 4, 'available', 2, 1),
+('Meja 06', 'Zona Baca Utama', 4, 'available', 2, 2),
+('Meja 07', 'Zona Komputer & Riset', 2, 'occupied', 2, 3),
+('Meja 08', 'Zona Komputer & Riset', 2, 'available', 2, 4),
+('Meja 09', 'Zona Komputer & Riset', 2, 'available', 3, 1),
+('Meja 10', 'Zona Komputer & Riset', 2, 'occupied', 3, 2),
+('Meja 11', 'Zona Baca Tenang', 4, 'available', 3, 3),
+('Meja 12', 'Zona Baca Tenang', 4, 'occupied', 3, 4),
+('Meja 13', 'Zona Baca Tenang', 4, 'available', 4, 1),
+('Meja 14', 'Zona Baca Tenang', 4, 'available', 4, 2),
+('Meja 15', 'Bilik Diskusi', 6, 'reserved', 4, 3),
+('Meja 16', 'Bilik Diskusi', 6, 'available', 4, 4)
+ON DUPLICATE KEY UPDATE `table_number` = VALUES(`table_number`);
 
 -- Data Awal Pesanan Buku (Orders)
 INSERT INTO `orders` (`ticket_code`, `book_title`, `table_no`, `status`) VALUES

@@ -2,18 +2,19 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Clock, Search, CheckCircle, PackageCheck, RefreshCw, Database, Ticket, Check, 
   Filter, Volume2, VolumeX, BellRing, Trash2, Package, Camera, Upload, Eye, X, 
-  AlertCircle, Plus, User, CheckCircle2, Phone, MapPin, MessageCircle 
+  AlertCircle, Plus, User, CheckCircle2, Phone, MapPin, MessageCircle, BookOpen, 
+  Edit3, Image, Star, Globe, Layers, Save
 } from 'lucide-react';
 import { announceTableOrder } from '../utils/soundAnnouncement';
 import { useModal } from '../context/ModalContext';
 
 function StaffDashboard() {
   const { showAlert, showConfirm } = useModal();
-  // Modul Aktif: 'orders' (Pesanan Buku Meja) atau 'lost_found' (Barang Tertinggal)
+  // Modul Aktif: 'orders' | 'lost_found' | 'books'
   const [activeModule, setActiveModule] = useState('orders');
 
   // ========================================================
-  // STATE PESANAN BUKU MEJA
+  // STATE PESANAN BUKU
   // ========================================================
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +22,29 @@ function StaffDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [soundEnabled, setSoundEnabled] = useState(true);
+
+  // ========================================================
+  // STATE MANAJEMEN BUKU (KATALOG)
+  // ========================================================
+  const [bookList, setBookList] = useState([]);
+  const [loadingBooks, setLoadingBooks] = useState(false);
+  const [bookSearch, setBookSearch] = useState('');
+  const [bookCatFilter, setBookCatFilter] = useState('all');
+  const [bookPage, setBookPage] = useState(1);
+  const BOOKS_PER_PAGE = 20;
+
+  // State Modal Tambah / Edit Buku
+  const [showBookModal, setShowBookModal] = useState(false);
+  const [editingBook, setEditingBook] = useState(null); // null = tambah baru, objek = edit
+  const [bookForm, setBookForm] = useState({
+    title: '', author: '', category: '', classification: '',
+    shelf_location: '', stock: 1, cover_url: '', cover_image: null
+  });
+  const [coverPreview, setCoverPreview] = useState(null);
+  const [isSubmittingBook, setIsSubmittingBook] = useState(false);
+  const [searchingCover, setSearchingCover] = useState(false);
+  const [coverCandidates, setCoverCandidates] = useState([]);
+  const bookCoverInputRef = useRef(null);
 
   // ========================================================
   // STATE BARANG TERTINGGAL (LOST & FOUND)
@@ -101,17 +125,201 @@ function StaffDashboard() {
     }
   };
 
+  // --------------------------------------------------------
+  // FETCH BOOKS (Katalog Buku untuk Staf)
+  // --------------------------------------------------------
+  const fetchBooks = async () => {
+    setLoadingBooks(true);
+    try {
+      const res = await fetch('/api/books');
+      if (res.ok) {
+        const data = await res.json();
+        setBookList(data);
+      }
+    } catch (e) {
+      console.warn('Gagal ambil data buku:', e);
+    } finally {
+      setLoadingBooks(false);
+    }
+  };
+
   useEffect(() => {
     fetchOrders();
     fetchLostFound();
+    fetchBooks();
     const interval = setInterval(() => {
       fetchOrders();
       if (activeModule === 'lost_found') {
         fetchLostFound();
+      } else if (activeModule === 'books') {
+        fetchBooks();
       }
-    }, 4000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [activeModule]);
+
+  // --------------------------------------------------------
+  // HANDLERS MANAJEMEN BUKU
+  // --------------------------------------------------------
+  const resetBookForm = () => {
+    setBookForm({ title: '', author: '', category: '', classification: '', shelf_location: '', stock: 1, cover_url: '', cover_image: null });
+    setCoverPreview(null);
+    setCoverCandidates([]);
+    setEditingBook(null);
+  };
+
+  const handleOpenAddBook = () => {
+    resetBookForm();
+    setShowBookModal(true);
+  };
+
+  const handleOpenEditBook = (book) => {
+    setEditingBook(book);
+    setBookForm({
+      title: book.title || '',
+      author: book.author || '',
+      category: book.category || '',
+      classification: book.classification || '',
+      shelf_location: book.shelf_location || '',
+      stock: book.stock || 1,
+      cover_url: book.cover_url || '',
+      cover_image: null
+    });
+    setCoverPreview(book.cover_url || null);
+    setCoverCandidates([]);
+    setShowBookModal(true);
+  };
+
+  // Upload sampul dari file lokal
+  const handleBookCoverFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX = 800;
+        let w = img.width, h = img.height;
+        if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+        if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const compressed = canvas.toDataURL('image/jpeg', 0.82);
+        setBookForm(prev => ({ ...prev, cover_image: compressed, cover_url: '' }));
+        setCoverPreview(compressed);
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Cari sampul otomatis via OpenLibrary
+  const handleSearchCover = async () => {
+    if (!bookForm.title.trim()) {
+      showAlert('Isi judul buku terlebih dahulu sebelum mencari sampul.', { type: 'warning' });
+      return;
+    }
+    setSearchingCover(true);
+    setCoverCandidates([]);
+    try {
+      const res = await fetch('/api/books/search-cover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: bookForm.title, author: bookForm.author })
+      });
+      const data = await res.json();
+      if (data.candidates && data.candidates.length > 0) {
+        setCoverCandidates(data.candidates);
+      } else {
+        showAlert('Sampul tidak ditemukan di OpenLibrary. Coba upload foto sendiri.', { type: 'info' });
+      }
+    } catch (err) {
+      showAlert('Gagal terhubung ke server untuk mencari sampul.', { type: 'danger' });
+    } finally {
+      setSearchingCover(false);
+    }
+  };
+
+  const handleSelectCoverCandidate = (candidate) => {
+    setBookForm(prev => ({ ...prev, cover_url: candidate.cover_url, cover_image: null }));
+    setCoverPreview(candidate.cover_url);
+    setCoverCandidates([]);
+  };
+
+  const handleSubmitBook = async (e) => {
+    e.preventDefault();
+    if (!bookForm.title.trim()) {
+      showAlert('Judul buku wajib diisi!', { type: 'warning', title: 'Data Belum Lengkap' });
+      return;
+    }
+    if (!bookForm.author.trim()) {
+      showAlert('Nama pengarang wajib diisi!', { type: 'warning', title: 'Data Belum Lengkap' });
+      return;
+    }
+    setIsSubmittingBook(true);
+    try {
+      const payload = {
+        title: bookForm.title.trim(),
+        author: bookForm.author.trim(),
+        category: bookForm.category.trim() || 'Umum',
+        classification: bookForm.classification.trim() || '000',
+        shelf_location: bookForm.shelf_location.trim() || 'Rak Utama',
+        stock: parseInt(bookForm.stock) || 1,
+        cover_url: bookForm.cover_image ? null : (bookForm.cover_url || null),
+        cover_image: bookForm.cover_image || null
+      };
+
+      const url = editingBook ? `/api/books/${editingBook.id}` : '/api/books';
+      const method = editingBook ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        showAlert(
+          editingBook
+            ? `Buku "${bookForm.title}" berhasil diperbarui!`
+            : `Buku "${bookForm.title}" berhasil ditambahkan ke katalog!`,
+          { type: 'success', title: editingBook ? 'Buku Diperbarui' : 'Buku Ditambahkan' }
+        );
+        setShowBookModal(false);
+        resetBookForm();
+        fetchBooks();
+      } else {
+        showAlert(data.error || 'Terjadi kesalahan saat menyimpan buku.', { type: 'danger', title: 'Gagal Menyimpan' });
+      }
+    } catch (err) {
+      showAlert('Gagal terhubung ke server backend: ' + err.message, { type: 'danger', title: 'Koneksi Gagal' });
+    } finally {
+      setIsSubmittingBook(false);
+    }
+  };
+
+  const handleDeleteBook = async (book) => {
+    const confirmed = await showConfirm(`Yakin ingin menghapus buku "${book.title}" dari katalog perpustakaan?`, {
+      title: 'Hapus Buku',
+      confirmText: 'Ya, Hapus Buku',
+      cancelText: 'Batal',
+      type: 'danger'
+    });
+    if (!confirmed) return;
+    try {
+      const res = await fetch(`/api/books/${book.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        showAlert(`Buku "${book.title}" berhasil dihapus.`, { type: 'success', title: 'Buku Dihapus' });
+        fetchBooks();
+      } else {
+        showAlert('Gagal menghapus buku.', { type: 'danger', title: 'Gagal' });
+      }
+    } catch (err) {
+      showAlert('Koneksi gagal: ' + err.message, { type: 'danger', title: 'Error' });
+    }
+  };
 
   // --------------------------------------------------------
   // HANDLERS PESANAN BUKU
@@ -279,9 +487,40 @@ function StaffDashboard() {
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    // Kompresi foto secara otomatis sebelum disimpan ke database
     const reader = new FileReader();
-    reader.onload = () => {
-      setHandoverData(prev => ({ ...prev, proof_photo: reader.result }));
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1000;
+        const MAX_HEIGHT = 1000;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width = Math.round((width * MAX_HEIGHT) / height);
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Kompresi ke format JPEG 80% (sekitar ~100KB, sangat aman untuk MySQL)
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        setHandoverData(prev => ({ ...prev, proof_photo: compressedDataUrl }));
+      };
+      img.src = event.target.result;
     };
     reader.readAsDataURL(file);
   };
@@ -307,7 +546,7 @@ function StaffDashboard() {
       });
 
       if (res.ok) {
-        showAlert('Barang berhasil diserahkan ke pemilik dan foto bukti serah terima telah tersimpan!', {
+        showAlert('Barang berhasil diserahkan ke pemilik dan foto bukti serah terima telah tersimpan di database!', {
           type: 'success',
           title: 'Serah Terima Berhasil'
         });
@@ -315,9 +554,19 @@ function StaffDashboard() {
         setHandoverModalItem(null);
         setHandoverData({ claimed_by: '', staff_notes: '', proof_photo: null });
         fetchLostFound();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        showAlert(errData.error || 'Gagal menyimpan serah terima ke server.', {
+          type: 'danger',
+          title: 'Gagal Menyimpan'
+        });
       }
     } catch (err) {
       console.error('Gagal mencatat serah terima:', err);
+      showAlert('Gagal terhubung ke server database saat menyimpan bukti.', {
+        type: 'danger',
+        title: 'Koneksi Terputus'
+      });
     }
   };
 
@@ -449,6 +698,37 @@ function StaffDashboard() {
               {userReportItems.length} Laporan Pengunjung
             </span>
           )}
+        </button>
+
+        <button
+          className={`btn ${activeModule === 'books' ? '' : 'btn-secondary'}`}
+          style={{
+            padding: '0.65rem 1.4rem',
+            fontSize: '0.92rem',
+            fontWeight: '700',
+            background: activeModule === 'books' ? 'linear-gradient(135deg, #059669, #10b981)' : '',
+            borderColor: activeModule === 'books' ? '#10b981' : '',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: activeModule === 'books' ? '#fff' : ''
+          }}
+          onClick={() => {
+            setActiveModule('books');
+            fetchBooks();
+          }}
+        >
+          <BookOpen size={18} /> Katalog &amp; Tambah Buku
+          <span style={{ 
+            background: activeModule === 'books' ? 'rgba(0,0,0,0.3)' : 'rgba(16, 185, 129, 0.25)', 
+            color: activeModule === 'books' ? '#fff' : '#34d399',
+            padding: '2px 8px', 
+            borderRadius: '12px', 
+            fontSize: '0.75rem',
+            fontWeight: '800'
+          }}>
+            {bookList.length}
+          </span>
         </button>
       </div>
 
@@ -1300,6 +1580,242 @@ function StaffDashboard() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODUL 3: KONTROL STATUS MEJA & OKUPANSI RUANGAN */}
+      {/* ======================================================== */}
+      {activeModule === 'tables' && (
+        <div>
+          {/* Header Modul Kontrol Meja */}
+          <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div>
+              <h1 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <LayoutGrid size={26} color="#10b981" /> Manajemen Status Meja Real-Time
+              </h1>
+              <p>
+                Pantau okupansi ruangan secara langsung, ubah status meja secara manual jika pengunjung tidak melakukan check-out, atau reset semua meja saat perpustakaan tutup.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button 
+                className="btn btn-secondary"
+                style={{ padding: '0.55rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                onClick={fetchStaffTables}
+              >
+                <RefreshCw size={15} /> Segarkan
+              </button>
+
+              <button 
+                className="btn btn-secondary"
+                style={{ 
+                  padding: '0.55rem 1rem', 
+                  fontSize: '0.85rem', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '6px',
+                  borderColor: 'rgba(239, 68, 68, 0.4)',
+                  color: '#f87171'
+                }}
+                onClick={handleStaffResetAllTables}
+                title="Reset semua status meja menjadi Tersedia / Kosong"
+              >
+                <Trash2 size={15} /> Reset Semua Meja
+              </button>
+
+              <a 
+                href="/tables"
+                target="_blank"
+                rel="noreferrer"
+                className="btn"
+                style={{ 
+                  background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', 
+                  border: 'none', 
+                  color: '#fff', 
+                  fontWeight: '700', 
+                  padding: '0.55rem 1.1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  textDecoration: 'none',
+                  fontSize: '0.85rem'
+                }}
+              >
+                <Monitor size={15} /> Buka Layar TV Lobby ↗
+              </a>
+            </div>
+          </div>
+
+          {/* Stats Bar Ringkas */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div className="glass-panel" style={{ padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(99,102,241,0.2)', color: '#818cf8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Users size={22} />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Total Kapasitas</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: '800' }}>{staffStats.total_seats || 56} Kursi <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>({staffStats.total_tables || staffTables.length} Meja)</span></div>
+              </div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(239,68,68,0.2)', color: '#f87171', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <XCircle size={22} />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Meja Terisi</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: '800', color: '#f87171' }}>{staffTables.filter(t => t.status === 'occupied').length} Meja</div>
+              </div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(16,185,129,0.2)', color: '#34d399', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <CheckCircle2 size={22} />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Meja Kosong (Tersedia)</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: '800', color: '#34d399' }}>{staffTables.filter(t => t.status === 'available').length} Meja</div>
+              </div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(56,189,248,0.2)', color: '#38bdf8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ShieldCheck size={22} />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tingkat Keterisian</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: '800', color: '#38bdf8' }}>{staffStats.occupancy_rate || 0}%</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter Zona Meja */}
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Filter size={14} /> Filter Zona:
+            </span>
+            {['ALL', 'Zona Baca Utama', 'Zona Komputer & Riset', 'Zona Baca Tenang', 'Bilik Diskusi'].map(z => (
+              <button
+                key={z}
+                className={`btn ${tableZoneFilter === z ? '' : 'btn-secondary'}`}
+                style={{
+                  padding: '0.35rem 0.8rem',
+                  fontSize: '0.8rem',
+                  background: tableZoneFilter === z ? 'var(--primary-color)' : '',
+                  borderColor: tableZoneFilter === z ? 'var(--primary-color)' : ''
+                }}
+                onClick={() => setTableZoneFilter(z)}
+              >
+                {z === 'ALL' ? 'Semua Zona' : z}
+              </button>
+            ))}
+          </div>
+
+          {/* Grid Manajemen Meja */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1.2rem' }}>
+            {staffTables
+              .filter(t => tableZoneFilter === 'ALL' || t.zone === tableZoneFilter)
+              .map(table => {
+                const isOccupied = table.status === 'occupied';
+                const isReserved = table.status === 'reserved';
+                const isAvailable = table.status === 'available';
+
+                return (
+                  <div
+                    key={table.id}
+                    className="glass-panel"
+                    style={{
+                      padding: '1.25rem',
+                      borderRadius: '14px',
+                      border: isOccupied 
+                        ? '1.5px solid rgba(239, 68, 68, 0.5)' 
+                        : isReserved 
+                        ? '1.5px solid rgba(245, 158, 11, 0.5)' 
+                        : '1.5px solid rgba(16, 185, 129, 0.4)',
+                      background: isOccupied 
+                        ? 'linear-gradient(145deg, rgba(127, 29, 29, 0.2), rgba(15, 23, 42, 0.85))' 
+                        : isReserved 
+                        ? 'linear-gradient(145deg, rgba(120, 53, 15, 0.2), rgba(15, 23, 42, 0.85))' 
+                        : 'linear-gradient(145deg, rgba(6, 78, 59, 0.2), rgba(15, 23, 42, 0.85))',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      gap: '1rem'
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                        <span style={{ fontSize: '1.2rem', fontWeight: '800', color: '#fff' }}>{table.table_number}</span>
+                        <span style={{
+                          fontSize: '0.7rem',
+                          fontWeight: '800',
+                          padding: '0.2rem 0.6rem',
+                          borderRadius: '999px',
+                          background: isAvailable ? 'rgba(16, 185, 129, 0.2)' : isOccupied ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                          color: isAvailable ? '#34d399' : isOccupied ? '#f87171' : '#fbbf24',
+                          border: `1px solid ${isAvailable ? '#10b981' : isOccupied ? '#ef4444' : '#f59e0b'}`
+                        }}>
+                          {isAvailable ? 'KOSONG' : isOccupied ? 'TERISI' : 'DIPESAN'}
+                        </span>
+                      </div>
+
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <MapPin size={13} /> {table.zone}
+                      </div>
+
+                      <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.6rem 0.8rem', borderRadius: '8px', fontSize: '0.78rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Kapasitas:</span>
+                          <span style={{ fontWeight: '700', color: '#fff' }}>{table.capacity} Orang</span>
+                        </div>
+                        {isOccupied && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>Pengguna:</span>
+                            <span style={{ fontWeight: '700', color: '#fca5a5' }}>{table.current_user_name || 'Pengunjung'}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Tombol Kontrol Staf */}
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button
+                        className="btn"
+                        style={{
+                          flex: 1,
+                          padding: '0.5rem',
+                          fontSize: '0.8rem',
+                          fontWeight: '700',
+                          background: isOccupied 
+                            ? 'linear-gradient(135deg, #10b981, #059669)' 
+                            : 'linear-gradient(135deg, #ef4444, #dc2626)',
+                          color: '#fff',
+                          border: 'none'
+                        }}
+                        onClick={() => handleStaffToggleTable(table)}
+                      >
+                        {isOccupied ? '✓ Set Kosong' : '✕ Set Terisi'}
+                      </button>
+
+                      <button
+                        className="btn btn-secondary"
+                        style={{
+                          padding: '0.5rem 0.75rem',
+                          fontSize: '0.78rem',
+                          borderColor: isReserved ? '#f59e0b' : 'rgba(255,255,255,0.1)'
+                        }}
+                        onClick={() => handleStaffSetTableStatus(table, isReserved ? 'available' : 'reserved')}
+                        title="Set status reservasi khusus / dipesan"
+                      >
+                        {isReserved ? 'Batal Pesan' : 'Reservasi'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
         </div>
       )}
 

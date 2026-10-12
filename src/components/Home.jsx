@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Users, Package } from 'lucide-react';
+import { BookOpen, Users, Package, LayoutGrid, Monitor } from 'lucide-react';
 
 function Home() {
   const navigate = useNavigate();
@@ -8,16 +8,24 @@ function Home() {
     <div className="glass-panel home-hero-panel">
       <div className="page-header">
         <h1>Selamat Datang di Perpustakaan Umum Kota Parepare</h1>
-        <p>Sistem layanan perpustakaan pintar & pemesanan buku meja</p>
+        <p>Sistem layanan perpustakaan pintar, pemantauan meja real-time & pemesanan buku</p>
       </div>
       
       <div className="features-grid">
+        <div className="feature-card glass-panel" onClick={() => navigate('/tables')}>
+          <div className="feature-icon-wrapper" style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.2))', color: '#10b981' }}>
+            <LayoutGrid size={32} />
+          </div>
+          <h3>Status Meja Real-Time</h3>
+          <p>Pantau denah denah visual interaktif, jumlah kursi kosong/terisi, dan mode TV display untuk lobby pintu masuk.</p>
+        </div>
+
         <div className="feature-card glass-panel" onClick={() => navigate('/qr-system')}>
           <div className="feature-icon-wrapper">
             <BookOpen size={32} />
           </div>
-          <h3>Portal Pengunjung</h3>
-          <p>Pilih buku dari meja Anda, staf kami akan mencarikannya, dan Anda dapat mengambilnya di meja staf.</p>
+          <h3>Pesan Pinjam Buku</h3>
+          <p>Scan QR di meja Anda, pilih buku dari katalog digital, staf kami akan menyiapkannya untuk Anda.</p>
         </div>
 
         <div className="feature-card glass-panel" onClick={() => navigate('/lost-found')}>
@@ -33,7 +41,7 @@ function Home() {
             <Users size={32} />
           </div>
           <h3>Dashboard Staf</h3>
-          <p>Halaman staf untuk mengupdate status buku, mencatat barang tertinggal, dan foto bukti serah terima.</p>
+          <p>Halaman staf untuk mengupdate status buku, kontrol meja manual, dan foto bukti serah terima.</p>
         </div>
       </div>
     </div>
