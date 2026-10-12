@@ -6,6 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "sync:covers": "node sync_online_covers.js",
+    "sync:isbn": "node sync_isbnsearch_books.js",
+    "setup:300": "node setup_300_original_books.js",
+    "import:all": "node import_all_books.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -16,6 +20,7 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "mysql2": "^3.24.5",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "pdf-lib": "^1.17.1"
   }
 }

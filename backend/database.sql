@@ -16,14 +16,22 @@ CREATE TABLE IF NOT EXISTS `books` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `title` VARCHAR(500) NOT NULL,
   `author` VARCHAR(500) NOT NULL,
+<<<<<<< HEAD
   `classification` VARCHAR(50) DEFAULT '813',
   `category` VARCHAR(100) DEFAULT 'Novel',
   `shelf_location` VARCHAR(100) DEFAULT 'Lemari 3, Rak 1',
+=======
+  `classification` VARCHAR(20) DEFAULT '000',
+  `category` VARCHAR(100) DEFAULT 'Koleksi Umum',
+  `shelf_location` VARCHAR(255) DEFAULT 'Rak Koleksi Utama',
+>>>>>>> d8a935a1542f332fdb77a5846deeedc7ff10698e
   `stock` INT DEFAULT 1,
   `rating` DECIMAL(3,1) DEFAULT 4.5,
   `rating_count` INT DEFAULT 5,
   `read_count` INT DEFAULT 12,
   `cover_url` VARCHAR(500) DEFAULT NULL,
+  `isbn` VARCHAR(100) DEFAULT NULL,
+  `catalog_id` INT DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

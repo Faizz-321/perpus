@@ -153,14 +153,15 @@ function QRSystem() {
       result = result.filter(book => book.category === selectedCategory);
     }
 
-    // Filter Pencarian Judul, Penulis & Kategori
+    // Filter Pencarian Judul, Penulis, Kategori & ISBN
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(book => {
         const matchTitle = book.title.toLowerCase().includes(q);
         const matchAuthor = book.author.toLowerCase().includes(q);
         const matchCat = book.category && book.category.toLowerCase().includes(q);
-        return matchTitle || matchAuthor || matchCat;
+        const matchIsbn = book.isbn && book.isbn.toLowerCase().includes(q);
+        return matchTitle || matchAuthor || matchCat || matchIsbn;
       });
     }
 
@@ -404,7 +405,7 @@ function QRSystem() {
               <input 
                 type="text" 
                 className="form-control" 
-                placeholder="Cari judul buku (misal: Sebelas, Coki Pardede, Filsafat) atau pengarang..."
+                placeholder="Cari judul buku, pengarang, kategori, atau ISBN (misal: 978...)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{ paddingLeft: '3rem', fontSize: '0.95rem' }}
@@ -1144,6 +1145,8 @@ function QRSystem() {
                     </h2>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted, #94a3b8)', marginTop: '2px' }}>
                       ✍️ {rateModalBook.author} • {rateModalBook.category || 'Koleksi Umum'}
+                      {rateModalBook.isbn ? ` • ISBN: ${rateModalBook.isbn}` : ''}
+                      {rateModalBook.shelf_location ? ` • 📍 ${rateModalBook.shelf_location}` : ''}
                     </p>
                   </div>
                   <button 
