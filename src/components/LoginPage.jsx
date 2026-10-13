@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { BookOpen, Shield, Eye, EyeOff, LogIn, ArrowRight } from 'lucide-react';
 
 const STAFF_PIN = '1234';
@@ -54,33 +54,92 @@ function LoginPage({ onLogin }) {
         </div>
 
         {!selectedRole && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <button onClick={handleCustomerLogin} className="login-role-btn" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(99,102,241,0.05))', border: '1.5px solid rgba(99,102,241,0.4)', borderRadius: '16px', padding: '1.8rem 1.5rem', cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s ease', display: 'flex', alignItems: 'center', gap: '1.2rem', color: 'var(--text-main)' }} onMouseEnter={e => { e.currentTarget.style.border = '1.5px solid rgba(99,102,241,0.8)'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(99,102,241,0.25)'; }} onMouseLeave={e => { e.currentTarget.style.border = '1.5px solid rgba(99,102,241,0.4)'; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}>
-              <div style={{ width: '56px', height: '56px', borderRadius: '14px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 15px rgba(99,102,241,0.4)' }}><BookOpen size={26} color="white" /></div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: '700', fontSize: '1.05rem', marginBottom: '0.3rem' }}>Saya Pengunjung</div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: 1.5 }}>Cari buku, pesan pinjam, cek barang tertinggal</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+            <button
+              onClick={handleCustomerLogin}
+              className="login-role-btn"
+              style={{
+                background: 'rgba(99, 102, 241, 0.12)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: '1.5px solid rgba(99, 102, 241, 0.45)',
+                borderRadius: '16px',
+                padding: '1.8rem 1.5rem',
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1.2rem',
+                color: '#ffffff'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.border = '1.5px solid rgba(99,102,241,0.85)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 10px 30px rgba(99,102,241,0.3)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.border = '1.5px solid rgba(99,102,241,0.45)';
+                e.currentTarget.style.transform = 'none';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              <div style={{ width: '56px', height: '56px', borderRadius: '14px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 15px rgba(99,102,241,0.4)' }}>
+                <BookOpen size={26} color="white" />
               </div>
-              <ArrowRight size={20} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: '800', fontSize: '1.15rem', marginBottom: '0.3rem', color: '#ffffff' }}>Saya Pengunjung</div>
+                <div style={{ color: '#cbd5e1', fontSize: '0.9rem', fontWeight: '600', lineHeight: 1.5 }}>Cari buku, pesan pinjam, cek barang tertinggal</div>
+              </div>
+              <ArrowRight size={22} style={{ color: '#a5b4fc', flexShrink: 0 }} />
             </button>
 
-            <button onClick={() => setSelectedRole('staff')} style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.12), rgba(16,185,129,0.04))', border: '1.5px solid rgba(16,185,129,0.35)', borderRadius: '16px', padding: '1.8rem 1.5rem', cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s ease', display: 'flex', alignItems: 'center', gap: '1.2rem', color: 'var(--text-main)' }} onMouseEnter={e => { e.currentTarget.style.border = '1.5px solid rgba(16,185,129,0.75)'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(16,185,129,0.2)'; }} onMouseLeave={e => { e.currentTarget.style.border = '1.5px solid rgba(16,185,129,0.35)'; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}>
-              <div style={{ width: '56px', height: '56px', borderRadius: '14px', background: 'linear-gradient(135deg, #059669, #10b981)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 15px rgba(16,185,129,0.4)' }}><Shield size={26} color="white" /></div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: '700', fontSize: '1.05rem', marginBottom: '0.3rem' }}>Saya Pegawai / Staf</div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: 1.5 }}>Dashboard staf, kelola pesanan dan buku, notifikasi masuk</div>
+            <button
+              onClick={() => setSelectedRole('staff')}
+              style={{
+                background: 'rgba(16, 185, 129, 0.1)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: '1.5px solid rgba(16, 185, 129, 0.4)',
+                borderRadius: '16px',
+                padding: '1.8rem 1.5rem',
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1.2rem',
+                color: '#ffffff'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.border = '1.5px solid rgba(16,185,129,0.85)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 10px 30px rgba(16,185,129,0.25)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.border = '1.5px solid rgba(16,185,129,0.4)';
+                e.currentTarget.style.transform = 'none';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              <div style={{ width: '56px', height: '56px', borderRadius: '14px', background: 'linear-gradient(135deg, #059669, #10b981)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 15px rgba(16,185,129,0.4)' }}>
+                <Shield size={26} color="white" />
               </div>
-              <ArrowRight size={20} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: '800', fontSize: '1.15rem', marginBottom: '0.3rem', color: '#ffffff' }}>Saya Pegawai / Staf</div>
+                <div style={{ color: '#cbd5e1', fontSize: '0.9rem', fontWeight: '600', lineHeight: 1.5 }}>Dashboard staf, kelola pesanan dan buku, notifikasi masuk</div>
+              </div>
+              <ArrowRight size={22} style={{ color: '#6ee7b7', flexShrink: 0 }} />
             </button>
           </div>
         )}
 
         {selectedRole === 'staff' && (
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--surface-border)', borderRadius: '16px', padding: '2rem' }}>
+          <div style={{ background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: '16px', padding: '2rem' }}>
             <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
               <div style={{ width: '56px', height: '56px', borderRadius: '14px', background: 'linear-gradient(135deg, #059669, #10b981)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.8rem', boxShadow: '0 4px 15px rgba(16,185,129,0.3)' }}><Shield size={26} color="white" /></div>
-              <h2 style={{ margin: '0 0 0.3rem', fontSize: '1.15rem', fontWeight: '700' }}>Login Staf Perpustakaan</h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>Masukkan PIN akses staf</p>
+              <h2 style={{ margin: '0 0 0.3rem', fontSize: '1.25rem', fontWeight: '800', color: '#ffffff' }}>Login Staf Perpustakaan</h2>
+              <p style={{ color: '#cbd5e1', fontSize: '0.9rem', fontWeight: '600', margin: 0 }}>Masukkan PIN akses staf</p>
             </div>
 
             <form onSubmit={handleStaffLogin}>

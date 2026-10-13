@@ -1,18 +1,30 @@
-import { useState, useEffect, useCallback } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { BookOpen, Users, Package, Home as HomeIcon, Bell, LogOut, Shield, ChevronDown } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate, useSearchParams } from 'react-router-dom';
+import { BookOpen, Users, Package, Home as HomeIcon, Bell, LogOut, Shield, ChevronDown, Volume2, VolumeX, BookPlus } from 'lucide-react';
 import Home from './components/Home';
 import QRSystem from './components/QRSystem';
 import StaffDashboard from './components/StaffDashboard';
 import LostFound from './components/LostFound';
 import LoginPage from './components/LoginPage';
-import { ModalProvider } from './context/ModalContext';
+import { ModalProvider, useModal } from './context/ModalContext';
+import { playNewOrderAlarm } from './utils/soundAnnouncement';
 
 // ======================================================
 // NAVIGASI CUSTOMER (Pengunjung)
 // ======================================================
 function CustomerNav({ onLogout }) {
   const location = useLocation();
+  const { showConfirm } = useModal();
+
+  const handleLogoutClick = async () => {
+    const ok = await showConfirm('Apakah Anda yakin ingin keluar dari mode pengunjung dan kembali ke menu akses?', {
+      title: 'Konfirmasi Keluar',
+      confirmText: 'Ya, Keluar',
+      cancelText: 'Batal',
+      type: 'warning'
+    });
+    if (ok) onLogout();
+  };
 
   return (
     <header className="app-header">
@@ -20,6 +32,18 @@ function CustomerNav({ onLogout }) {
         <img src="/Lambang.png" alt="Lambang Kota Parepare" className="logo-img" />
         <span className="logo-title">Perpustakaan Umum Kota Parepare</span>
       </Link>
+
+      {/* Tombol Keluar Cepat untuk Pengunjung di Tampilan Mobile Header */}
+      <button
+        type="button"
+        onClick={handleLogoutClick}
+        className="mobile-header-logout"
+        title="Keluar dari mode pengunjung"
+      >
+        <LogOut size={15} />
+        <span>Keluar</span>
+      </button>
+
       <nav className="nav-links">
         <Link to="/qr-system" className={`nav-link ${location.pathname === '/qr-system' ? 'active' : ''}`}>
           <BookOpen size={20} />
@@ -30,7 +54,7 @@ function CustomerNav({ onLogout }) {
           Barang Tertinggal
         </Link>
         <button
-          onClick={onLogout}
+          onClick={handleLogoutClick}
           className="nav-link"
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem' }}
           title="Keluar / Ganti akses"
@@ -48,20 +72,54 @@ function CustomerNav({ onLogout }) {
 // ======================================================
 function StaffNav({ onLogout, notifCount }) {
   const location = useLocation();
+  const { showConfirm } = useModal();
   const [showNotif, setShowNotif] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    return localStorage.getItem('perpus_notif_sound') !== 'false';
+  });
+  const prevNotifIdsRef = useRef(null);
+
+  const handleStaffLogoutClick = async () => {
+    const ok = await showConfirm('Apakah Anda yakin ingin keluar dari mode staf perpustakaan?', {
+      title: 'Konfirmasi Keluar Staf',
+      confirmText: 'Ya, Keluar',
+      cancelText: 'Batal',
+      type: 'warning'
+    });
+    if (ok) onLogout();
+  };
+
+  const toggleSound = () => {
+    const nextState = !soundEnabled;
+    setSoundEnabled(nextState);
+    localStorage.setItem('perpus_notif_sound', String(nextState));
+    if (nextState) {
+      playNewOrderAlarm();
+    }
+  };
 
   const fetchNotifications = useCallback(async () => {
     try {
       const res = await fetch('/api/notifications');
       if (res.ok) {
         const data = await res.json();
+        if (Array.isArray(data)) {
+          // Bunyikan alarm singkat jika ada pesanan baru yang masuk
+          if (prevNotifIdsRef.current !== null) {
+            const hasNewOrder = data.some(item => !prevNotifIdsRef.current.includes(item.id));
+            if (hasNewOrder && soundEnabled) {
+              playNewOrderAlarm();
+            }
+          }
+          prevNotifIdsRef.current = data.map(item => item.id);
+        }
         setNotifications(data);
       }
     } catch {
       // backend mungkin belum siap
     }
-  }, []);
+  }, [soundEnabled]);
 
   useEffect(() => {
     fetchNotifications();
@@ -82,6 +140,18 @@ function StaffNav({ onLogout, notifCount }) {
           </span>
         </span>
       </Link>
+
+      {/* Tombol Keluar Cepat untuk Staf di Tampilan Mobile Header */}
+      <button
+        type="button"
+        onClick={handleStaffLogoutClick}
+        className="mobile-header-logout"
+        title="Keluar dari mode staf"
+      >
+        <LogOut size={15} />
+        <span>Keluar</span>
+      </button>
+
       <nav className="nav-links" style={{ alignItems: 'center' }}>
         <Link to="/staff" className={`nav-link ${location.pathname === '/staff' ? 'active' : ''}`}>
           <Shield size={18} />
@@ -123,21 +193,61 @@ function StaffNav({ onLogout, notifCount }) {
               <div onClick={() => setShowNotif(false)} style={{ position: 'fixed', inset: 0, zIndex: 99 }} />
               <div style={{
                 position: 'absolute', top: 'calc(100% + 12px)', right: 0,
-                width: '360px', maxHeight: '400px', overflowY: 'auto',
+                width: '380px', maxHeight: '420px', overflowY: 'auto',
                 background: 'var(--surface)', border: '1px solid var(--surface-border)',
                 borderRadius: '14px', zIndex: 100,
                 boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
                 animation: 'fadeIn 0.15s ease'
               }}>
-                <div style={{ padding: '1rem 1.2rem 0.8rem', borderBottom: '1px solid var(--surface-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ padding: '0.9rem 1.2rem', borderBottom: '1px solid var(--surface-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                   <span style={{ fontWeight: '700', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Bell size={15} color="#fbbf24" /> Pesanan Masuk
+                    {pendingCount > 0 && (
+                      <span style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', fontSize: '0.75rem', fontWeight: '700', padding: '2px 8px', borderRadius: '10px' }}>
+                        {pendingCount}
+                      </span>
+                    )}
                   </span>
-                  {pendingCount > 0 && (
-                    <span style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', fontSize: '0.75rem', fontWeight: '700', padding: '2px 8px', borderRadius: '10px' }}>
-                      {pendingCount} pending
-                    </span>
-                  )}
+                  
+                  {/* Kontrol Bunyi Alarm Notifikasi */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleSound(); }}
+                      style={{
+                        background: soundEnabled ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                        border: '1px solid ' + (soundEnabled ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.35)'),
+                        color: soundEnabled ? '#10b981' : '#f87171',
+                        borderRadius: '6px',
+                        padding: '4px 8px',
+                        fontSize: '0.74rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                      title="Nyalakan / Matikan bunyi alarm notifikasi"
+                    >
+                      {soundEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
+                      {soundEnabled ? 'Alarm ON' : 'Mute'}
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); playNewOrderAlarm(); }}
+                      style={{
+                        background: 'rgba(99,102,241,0.15)',
+                        border: '1px solid rgba(99,102,241,0.35)',
+                        color: '#a5b4fc',
+                        borderRadius: '6px',
+                        padding: '4px 8px',
+                        fontSize: '0.74rem',
+                        fontWeight: '700',
+                        cursor: 'pointer'
+                      }}
+                      title="Uji coba suara alarm"
+                    >
+                      Tes 🔊
+                    </button>
+                  </div>
                 </div>
                 {notifications.length === 0 ? (
                   <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
@@ -183,7 +293,7 @@ function StaffNav({ onLogout, notifCount }) {
         </div>
 
         <button
-          onClick={onLogout}
+          onClick={handleStaffLogoutClick}
           className="nav-link"
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem' }}
           title="Keluar dari mode staf"
@@ -199,8 +309,20 @@ function StaffNav({ onLogout, notifCount }) {
 // ======================================================
 // MOBILE NAV CUSTOMER
 // ======================================================
-function CustomerMobileNav() {
+function CustomerMobileNav({ onLogout }) {
   const location = useLocation();
+  const { showConfirm } = useModal();
+
+  const handleLogoutClick = async () => {
+    const ok = await showConfirm('Apakah Anda yakin ingin keluar dari mode pengunjung dan kembali ke menu akses?', {
+      title: 'Konfirmasi Keluar',
+      confirmText: 'Ya, Keluar',
+      cancelText: 'Batal',
+      type: 'warning'
+    });
+    if (ok) onLogout();
+  };
+
   return (
     <nav className="mobile-bottom-nav">
       <Link to="/" className={`mobile-nav-item ${location.pathname === '/' ? 'active' : ''}`}>
@@ -212,6 +334,14 @@ function CustomerMobileNav() {
       <Link to="/lost-found" className={`mobile-nav-item ${location.pathname === '/lost-found' ? 'active' : ''}`}>
         <Package size={20} /><span>Barang Hilang</span>
       </Link>
+      <button
+        type="button"
+        onClick={handleLogoutClick}
+        className="mobile-nav-item mobile-nav-btn-logout"
+        title="Keluar dari mode pengunjung"
+      >
+        <LogOut size={20} /><span>Keluar</span>
+      </button>
     </nav>
   );
 }
@@ -219,13 +349,52 @@ function CustomerMobileNav() {
 // ======================================================
 // MOBILE NAV STAFF
 // ======================================================
-function StaffMobileNav() {
-  const location = useLocation();
+function StaffMobileNav({ onLogout }) {
+  const [searchParams] = useSearchParams();
+  const currentTab = searchParams.get('tab') || 'orders';
+  const { showConfirm } = useModal();
+
+  const handleStaffLogoutClick = async () => {
+    const ok = await showConfirm('Apakah Anda yakin ingin keluar dari mode staf perpustakaan?', {
+      title: 'Konfirmasi Keluar Staf',
+      confirmText: 'Ya, Keluar',
+      cancelText: 'Batal',
+      type: 'warning'
+    });
+    if (ok) onLogout();
+  };
+
   return (
     <nav className="mobile-bottom-nav">
-      <Link to="/staff" className={`mobile-nav-item ${location.pathname === '/staff' ? 'active' : ''}`}>
+      <Link 
+        to="/staff" 
+        className={`mobile-nav-item ${currentTab === 'orders' ? 'active' : ''}`}
+        title="Antrean Pesanan Tiket"
+      >
         <Shield size={20} /><span>Dashboard</span>
       </Link>
+      <Link 
+        to="/staff?tab=lost_found" 
+        className={`mobile-nav-item ${currentTab === 'lost_found' ? 'active' : ''}`}
+        title="Barang Tertinggal (Lost & Found)"
+      >
+        <Package size={20} /><span>Brg Tertinggal</span>
+      </Link>
+      <Link 
+        to="/staff?tab=import_books" 
+        className={`mobile-nav-item ${currentTab === 'import_books' ? 'active' : ''}`}
+        title="Tambah Buku dari PDF"
+      >
+        <BookPlus size={20} /><span>Tambah Buku</span>
+      </Link>
+      <button
+        type="button"
+        onClick={handleStaffLogoutClick}
+        className="mobile-nav-item mobile-nav-btn-logout"
+        title="Keluar dari mode staf"
+      >
+        <LogOut size={20} /><span>Logout</span>
+      </button>
     </nav>
   );
 }
@@ -271,7 +440,7 @@ function App() {
                 <Route path="*" element={<Navigate to="/staff" replace />} />
               </Routes>
             </main>
-            <StaffMobileNav />
+            <StaffMobileNav onLogout={handleLogout} />
           </div>
         </Router>
       </ModalProvider>
@@ -295,7 +464,7 @@ function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
-          <CustomerMobileNav />
+          <CustomerMobileNav onLogout={handleLogout} />
         </div>
       </Router>
     </ModalProvider>

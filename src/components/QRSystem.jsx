@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Send, Loader2, Ticket, CheckCircle2, Clock, Search, BookOpen, AlertCircle, XCircle, Plus, Check, ChevronLeft, ChevronRight, ChevronDown, Bookmark, MapPin, Volume2, Star, Flame, Sparkles, MessageSquare } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Send, Loader2, Ticket, CheckCircle2, Clock, Search, BookOpen, AlertCircle, XCircle, Plus, Check, ChevronLeft, ChevronRight, ChevronDown, Bookmark, MapPin, Volume2, Star, Flame, Sparkles, MessageSquare, Bell, Lock, Eye, ArrowRight } from 'lucide-react';
 import { announceTableOrder } from '../utils/soundAnnouncement';
 import { useModal } from '../context/ModalContext';
 
@@ -38,6 +39,22 @@ function QRSystem() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeOrder, setActiveOrder] = useState(null);
 
+  // Status apakah pengunjung sedang memiliki pesanan aktif yang belum selesai/dibatalkan
+  const hasActiveOrder = Boolean(
+    activeOrder && 
+    activeOrder.status && 
+    activeOrder.status !== 'completed' && 
+    activeOrder.status !== 'cancelled'
+  );
+
+  // Sinkronkan nomor meja otomatis jika sudah ada pesanan aktif
+  useEffect(() => {
+    if (activeOrder?.table_no && !tableNo) {
+      setTableNo(activeOrder.table_no);
+    }
+  }, [activeOrder?.table_no, tableNo]);
+
+
   // State untuk Fitur Rating Bintang & Modal Ulasan
   const [ratedBooks, setRatedBooks] = useState(() => {
     try {
@@ -52,6 +69,31 @@ function QRSystem() {
   const [modalReview, setModalReview] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [ratingSuccessMsg, setRatingSuccessMsg] = useState('');
+
+  // State Izin Web Notification Browser
+  const [notifPermission, setNotifPermission] = useState(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission;
+    }
+    return 'unsupported';
+  });
+
+  const requestNotifPermission = async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        const perm = await Notification.requestPermission();
+        setNotifPermission(perm);
+        if (perm === 'granted') {
+          new Notification('🔔 Notifikasi Panggilan Aktif', {
+            body: 'HP Anda akan berbunyi saat buku selesai disiapkan staf perpustakaan!',
+            icon: '/Lambang.png'
+          });
+        }
+      } catch (e) {
+        console.warn('Izin notifikasi gagal:', e);
+      }
+    }
+  };
 
   const tables = Array.from({ length: 24 }, (_, i) => `Meja ${i + 1}`);
 
@@ -71,6 +113,11 @@ function QRSystem() {
     }
   }, []);
 
+  // Otomatis scroll ke atas ketika ganti step (agar tiket langsung terlihat di HP tanpa perlu reload)
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [step]);
+
   // Simpan / update status tiket ke localStorage
   useEffect(() => {
     if (activeOrder) {
@@ -81,6 +128,18 @@ function QRSystem() {
       }
     }
   }, [activeOrder]);
+
+  // Kunci scroll halaman saat modal penilaian buku terbuka agar layar tidak bergeser
+  useEffect(() => {
+    if (rateModalBook) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [rateModalBook]);
 
   // Ambil 260+ buku inventaris dari database MySQL
   useEffect(() => {
@@ -103,19 +162,86 @@ function QRSystem() {
       });
   }, []);
 
-  // Polling status tiket secara real-time saat berada di layar tiket (step 2)
+  // Polling status tiket & panggilan suara secara real-time
+  // TETAP AKTIF di latar belakang baik saat pengunjung di tiket (step 2) MAUPUN saat melihat katalog (step 1)
+  const lastHandledCallRef = useRef(0);
+  const stepRef = useRef(step);
   useEffect(() => {
-    if (step !== 2 || !activeOrder?.id) return;
+    stepRef.current = step;
+  }, [step]);
+
+  useEffect(() => {
+    if (!activeOrder?.id) return;
 
     const checkStatus = async () => {
       try {
         const res = await fetch(`/api/orders/${activeOrder.id}`);
         if (res.ok) {
           const data = await res.json();
+          const callCount = Number(data.call_count || 0);
+
           setActiveOrder((prev) => ({
             ...prev,
             status: data.status,
+            call_count: callCount,
+            last_called_at: data.last_called_at
           }));
+
+          // Jika pesanan berstatus ready dan dipanggil staf (panggilan awal atau panggil ulang)
+          if (data.status === 'ready') {
+            const effectiveCall = Math.max(1, callCount);
+            if (effectiveCall > lastHandledCallRef.current) {
+              lastHandledCallRef.current = effectiveCall;
+
+              // 1. Bunyikan suara bel Ding-Dong & suara pengumuman bahasa Indonesia di HP
+              // (Tetap berbunyi bahkan saat pengunjung sedang melihat-lihat buku di katalog step 1!)
+              announceTableOrder(data.table_no || activeOrder.table_no, data.ticket_code || activeOrder.ticket_code);
+
+              // 2. Munculkan Notifikasi Pop-up di Layar HP jika pengguna sedang membuka tab/aplikasi lain
+              if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+                try {
+                  const isRecall = effectiveCall > 1;
+                  const notifTitle = isRecall 
+                    ? `📢 PANGGILAN ULANG: ${data.table_no || activeOrder.table_no}`
+                    : `📚 BUKU SIAP DIAMBIL: ${data.table_no || activeOrder.table_no}`;
+
+                  const notif = new Notification(notifTitle, {
+                    body: `Tiket ${data.ticket_code || activeOrder.ticket_code}: Pesanan buku Anda sudah siap. Silakan mengambilnya di meja staf perpustakaan!`,
+                    icon: '/Lambang.png',
+                    badge: '/Lambang.png',
+                    tag: `perpus-order-call-${activeOrder.id}-${effectiveCall}`,
+                    renotify: true
+                  });
+
+                  notif.onclick = () => {
+                    window.focus();
+                    announceTableOrder(data.table_no || activeOrder.table_no, data.ticket_code || activeOrder.ticket_code);
+                  };
+                } catch (e) {
+                  console.warn('Gagal memicu notification browser:', e);
+                }
+              }
+
+              // 3. Jika pengguna sedang asyik di halaman katalog (step 1), munculkan konfirmasi cepat untuk langsung buka tiket
+              if (stepRef.current === 1) {
+                showConfirm(
+                  `Pesanan buku untuk ${data.table_no || activeOrder.table_no} (${data.ticket_code || activeOrder.ticket_code}) sudah SIAP DIAMBIL di Meja Staf! Buka tiket digital sekarang untuk ditunjukkan ke staf?`,
+                  {
+                    title: '🔔 Buku Sudah Siap!',
+                    confirmText: 'Buka Tiket Sekarang',
+                    cancelText: 'Tetap di Katalog',
+                    type: 'success'
+                  }
+                ).then((goToTicket) => {
+                  if (goToTicket) {
+                    setStep(2);
+                  }
+                });
+              }
+            }
+          } else if (data.status === 'completed' || data.status === 'cancelled') {
+            lastHandledCallRef.current = 0;
+          }
         }
       } catch (err) {
         // Abaikan jika error jaringan sesaat
@@ -124,19 +250,8 @@ function QRSystem() {
 
     const timer = setInterval(checkStatus, 2500);
     return () => clearInterval(timer);
-  }, [step, activeOrder?.id]);
+  }, [activeOrder?.id, activeOrder?.table_no, activeOrder?.ticket_code, showConfirm]);
 
-  // Otomatis bunyikan suara panggilan ke HP pengunjung saat pesanan berstatus ready
-  const announcedRef = useRef(false);
-  useEffect(() => {
-    if (activeOrder?.status === 'ready' && !announcedRef.current) {
-      announcedRef.current = true;
-      announceTableOrder(activeOrder.table_no, activeOrder.ticket_code);
-    }
-    if (activeOrder?.status !== 'ready') {
-      announcedRef.current = false;
-    }
-  }, [activeOrder?.status, activeOrder?.table_no, activeOrder?.ticket_code]);
 
   // Filter & Urutkan daftar buku berdasarkan pencarian, kategori, atau terfavorit
   const filteredBooks = useMemo(() => {
@@ -182,6 +297,15 @@ function QRSystem() {
 
   // Fungsi toggle pilih buku (Maksimal 3 buku)
   const toggleBook = (book) => {
+    // Jika masih ada pesanan aktif berjalan, kunci pemilihan buku (hanya boleh lihat)
+    if (hasActiveOrder) {
+      showAlert(`Anda masih memiliki pesanan aktif (${activeOrder.ticket_code}) di ${activeOrder.table_no}. Selesaikan pesanan Anda terlebih dahulu sebelum memesan buku lain.`, {
+        type: 'warning',
+        title: 'Pesanan Sedang Berjalan'
+      });
+      return;
+    }
+
     const isAlreadySelected = selectedBooks.some(b => b.id === book.id || b.title === book.title);
     if (isAlreadySelected) {
       setSelectedBooks(selectedBooks.filter(b => b.id !== book.id && b.title !== book.title));
@@ -209,6 +333,15 @@ function QRSystem() {
   // Kirim pesanan ke database (multi-buku)
   const handleSubmitOrder = async (e) => {
     e.preventDefault();
+
+    if (hasActiveOrder) {
+      showAlert(`Anda masih memiliki pesanan aktif (${activeOrder.ticket_code}). Mohon tunggu hingga pesanan selesai sebelum membuat pesanan baru.`, {
+        type: 'warning',
+        title: 'Pesanan Sedang Berjalan'
+      });
+      return;
+    }
+
     if (!tableNo) {
       showAlert('Silakan pilih nomor meja Anda terlebih dahulu!', {
         type: 'warning',
@@ -256,7 +389,11 @@ function QRSystem() {
 
       setActiveOrder(newOrder);
       localStorage.setItem('bibliotech_active_order', JSON.stringify(newOrder));
+      setSelectedBooks([]);
       setStep(2);
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+        requestNotifPermission();
+      }
     } catch (err) {
       console.warn('Backend offline, menggunakan kode tiket offline lokal:', err.message);
       const offlineOrder = {
@@ -270,6 +407,7 @@ function QRSystem() {
       };
       setActiveOrder(offlineOrder);
       localStorage.setItem('bibliotech_active_order', JSON.stringify(offlineOrder));
+      setSelectedBooks([]);
       setStep(2);
     } finally {
       setIsSubmitting(false);
@@ -375,6 +513,188 @@ function QRSystem() {
     <div className="glass-panel">
       {step === 1 && (
         <div>
+          {/* Banner Status Pesanan Aktif saat Pengunjung Melihat-lihat Katalog */}
+          {hasActiveOrder && (
+            <div 
+              className={`active-order-floating-banner ${activeOrder.status === 'ready' ? 'pulse-ready' : ''}`}
+              style={{
+                background: activeOrder.status === 'ready' 
+                  ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.28), rgba(6, 78, 59, 0.55))'
+                  : activeOrder.status === 'searching'
+                  ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.28), rgba(49, 46, 129, 0.55))'
+                  : 'linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(120, 53, 15, 0.5))',
+                border: `1.5px solid ${
+                  activeOrder.status === 'ready' ? '#10b981' : activeOrder.status === 'searching' ? '#6366f1' : '#f59e0b'
+                }`,
+                borderRadius: '16px',
+                padding: '1rem 1.25rem',
+                marginBottom: '1.8rem',
+                boxShadow: activeOrder.status === 'ready' 
+                  ? '0 0 25px rgba(16, 185, 129, 0.45)' 
+                  : '0 8px 24px rgba(0,0,0,0.3)',
+                backdropFilter: 'blur(10px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '1rem',
+                position: 'sticky',
+                top: '0.8rem',
+                zIndex: 90
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '260px' }}>
+                <div style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '12px',
+                  background: activeOrder.status === 'ready' ? '#10b981' : activeOrder.status === 'searching' ? '#6366f1' : '#f59e0b',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.25)'
+                }}>
+                  {activeOrder.status === 'ready' ? (
+                    <Bell size={24} />
+                  ) : activeOrder.status === 'searching' ? (
+                    <Search size={22} className="animate-spin" />
+                  ) : (
+                    <Clock size={22} />
+                  )}
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', color: '#94a3b8' }}>
+                      Status Pesanan: {activeOrder.table_no}
+                    </span>
+                    <span style={{
+                      background: 'rgba(255, 255, 255, 0.12)',
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                      fontSize: '0.78rem',
+                      fontWeight: '700',
+                      color: '#ffffff',
+                      letterSpacing: '0.5px'
+                    }}>
+                      {activeOrder.ticket_code}
+                    </span>
+                  </div>
+                  <div style={{
+                    fontSize: '1rem',
+                    fontWeight: '700',
+                    color: activeOrder.status === 'ready' ? '#34d399' : activeOrder.status === 'searching' ? '#a5b4fc' : '#fbbf24',
+                    marginTop: '2px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    {activeOrder.status === 'ready' && '🔔 BUKU SUDAH SIAP DIAMBIL DI MEJA STAF!'}
+                    {activeOrder.status === 'searching' && '🔍 Staf sedang mengambil buku Anda di rak...'}
+                    {activeOrder.status === 'pending' && '⏳ Pesanan dalam antrean menunggu staf...'}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'rgba(255, 255, 255, 0.75)', marginTop: '2px' }}>
+                    {activeOrder.status === 'ready' 
+                      ? 'Silakan menuju ke meja staf sekarang dan sebutkan nomor tiket Anda!'
+                      : 'Layar ini sedang dalam mode lihat buku. Suara bel akan berbunyi otomatis saat buku siap.'}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                {activeOrder.status === 'ready' && (
+                  <button
+                    type="button"
+                    onClick={() => announceTableOrder(activeOrder.table_no, activeOrder.ticket_code)}
+                    className="btn btn-secondary"
+                    style={{
+                      padding: '0.55rem 0.9rem',
+                      fontSize: '0.82rem',
+                      borderRadius: '10px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      color: '#34d399',
+                      borderColor: 'rgba(52, 211, 153, 0.4)'
+                    }}
+                    title="Dengarkan pengumuman suara panggilan"
+                  >
+                    <Volume2 size={16} /> Dengar Suara
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  className="btn"
+                  style={{
+                    padding: '0.55rem 1.2rem',
+                    fontSize: '0.88rem',
+                    fontWeight: '700',
+                    borderRadius: '10px',
+                    background: activeOrder.status === 'ready' 
+                      ? 'linear-gradient(135deg, #10b981, #059669)' 
+                      : 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                    boxShadow: activeOrder.status === 'ready' 
+                      ? '0 0 15px rgba(16, 185, 129, 0.5)' 
+                      : '0 0 15px var(--primary-glow)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Ticket size={17} /> Buka Tiket Digital <ArrowRight size={15} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Banner jika pesanan selesai */}
+          {!hasActiveOrder && activeOrder && activeOrder.status === 'completed' && (
+            <div style={{
+              background: 'rgba(16, 185, 129, 0.15)',
+              border: '1.5px solid rgba(16, 185, 129, 0.4)',
+              borderRadius: '14px',
+              padding: '1rem 1.2rem',
+              marginBottom: '1.8rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '10px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <CheckCircle2 size={24} color="#34d399" />
+                <div>
+                  <div style={{ fontWeight: '700', color: '#34d399', fontSize: '0.95rem' }}>
+                    Pesanan Tiket {activeOrder.ticket_code} Telah Selesai!
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
+                    Buku telah diserahkan di meja staf. Selamat membaca! Anda sekarang dapat memesan buku baru kembali.
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  type="button"
+                  className="btn btn-secondary" 
+                  onClick={() => setStep(2)}
+                  style={{ padding: '0.45rem 0.9rem', fontSize: '0.82rem' }}
+                >
+                  Lihat Tiket / Beri Ulasan
+                </button>
+                <button 
+                  type="button"
+                  className="btn" 
+                  onClick={handleOrderNewBooks}
+                  style={{ padding: '0.45rem 1rem', fontSize: '0.82rem', background: 'var(--primary-color)' }}
+                >
+                  Pesan Buku Baru
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="page-header" style={{ textAlign: 'center', marginBottom: '2rem' }}>
             <h1>Katalog & Pesan Buku Meja</h1>
             <p>Koleksi Buku Resmi <strong>Perpustakaan Umum Kota Parepare</strong></p>
@@ -389,13 +709,19 @@ function QRSystem() {
               className="form-control" 
               value={tableNo} 
               onChange={(e) => setTableNo(e.target.value)}
-              style={{ background: 'rgba(25, 27, 36, 0.95)', fontSize: '1rem', fontWeight: '600' }}
+              disabled={hasActiveOrder}
+              style={{ background: 'rgba(25, 27, 36, 0.95)', fontSize: '1rem', fontWeight: '600', opacity: hasActiveOrder ? 0.75 : 1, cursor: hasActiveOrder ? 'not-allowed' : 'pointer' }}
             >
               <option value="" disabled>-- Pilih Nomor Meja Anda --</option>
               {tables.map(table => (
                 <option key={table} value={table}>{table}</option>
               ))}
             </select>
+            {hasActiveOrder && (
+              <p style={{ textAlign: 'center', fontSize: '0.75rem', color: '#fbbf24', marginTop: '6px' }}>
+                🔒 Meja dikunci ke <strong>{activeOrder.table_no}</strong> karena ada pesanan berjalan.
+              </p>
+            )}
           </div>
 
           {/* Bar Pencarian Buku & Filter Kategori / Favorit */}
@@ -533,19 +859,105 @@ function QRSystem() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ 
-                background: selectedBooks.length > 0 ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255,255,255,0.08)', 
-                border: selectedBooks.length > 0 ? '1.5px solid var(--primary-color)' : '1px solid var(--surface-border)', 
-                color: selectedBooks.length > 0 ? '#c7d2fe' : 'var(--text-muted)', 
-                padding: '0.35rem 0.9rem', 
-                borderRadius: '20px', 
-                fontSize: '0.85rem', 
-                fontWeight: '700' 
-              }}>
-                Buku Dipilih: {selectedBooks.length}/3
-              </span>
+              {hasActiveOrder ? (
+                <span style={{ 
+                  background: 'rgba(245, 158, 11, 0.15)', 
+                  border: '1px solid rgba(245, 158, 11, 0.35)', 
+                  color: '#fcd34d', 
+                  padding: '0.35rem 0.9rem', 
+                  borderRadius: '20px', 
+                  fontSize: '0.82rem', 
+                  fontWeight: '700',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <Lock size={13} /> Mode Lihat Buku (Pesanan Sedang Diproses)
+                </span>
+              ) : (
+                <span style={{ 
+                  background: selectedBooks.length > 0 ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255,255,255,0.08)', 
+                  border: selectedBooks.length > 0 ? '1.5px solid var(--primary-color)' : '1px solid var(--surface-border)', 
+                  color: selectedBooks.length > 0 ? '#c7d2fe' : 'var(--text-muted)', 
+                  padding: '0.35rem 0.9rem', 
+                  borderRadius: '20px', 
+                  fontSize: '0.85rem', 
+                  fontWeight: '700' 
+                }}>
+                  Buku Dipilih: {selectedBooks.length}/3
+                </span>
+              )}
             </div>
           </div>
+
+          {/* Banner Pemberitahuan Mode Lihat-Lihat saat Ada Pesanan Aktif */}
+          {hasActiveOrder && (
+            <div style={{
+              background: 'rgba(99, 102, 241, 0.12)',
+              border: '1px solid rgba(99, 102, 241, 0.35)',
+              borderRadius: '12px',
+              padding: '0.8rem 1.1rem',
+              marginBottom: '1.4rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              fontSize: '0.85rem',
+              color: '#cbd5e1'
+            }}>
+              <Eye size={20} color="#818cf8" style={{ flexShrink: 0 }} />
+              <span>
+                <strong>Mode Lihat Katalog:</strong> Anda dapat menjelajahi koleksi, lokasi rak, dan membaca ulasan buku. Pemesanan buku lain baru bisa dilakukan setelah pesanan aktif <strong>({activeOrder.ticket_code})</strong> selesai diambil.
+              </span>
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* MOBILE ORDER BAR (DI ATAS DAFTAR BUKU - IKUT SCROLL ALAMI) */}
+          {/* ========================================================= */}
+          {selectedBooks.length > 0 && !hasActiveOrder && (
+            <div className="mobile-order-bar">
+              <div className="floating-order-info">
+                <div className="floating-order-badge-row">
+                  <span className="floating-order-tag">
+                    KERANJANG PINJAM
+                  </span>
+                  <span className="floating-order-count">
+                    ({selectedBooks.length}/3 Buku)
+                  </span>
+                </div>
+                <div className="floating-order-titles" title={selectedBooks.map(b => b.title).join(' • ')}>
+                  📚 {selectedBooks.map(b => b.title).join(' • ')}
+                </div>
+              </div>
+
+              <div className="floating-order-actions">
+                <button 
+                  type="button"
+                  className="btn btn-secondary floating-order-btn-cancel" 
+                  onClick={() => setSelectedBooks([])}
+                >
+                  Batal
+                </button>
+
+                <button 
+                  type="button"
+                  className="btn floating-order-btn-submit" 
+                  onClick={handleSubmitOrder} 
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" /> Memproses...
+                    </>
+                  ) : (
+                    <>
+                      <Send size={16} /> Pesan {selectedBooks.length} Buku Sekarang
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Loading State */}
           {loadingBooks ? (
@@ -592,6 +1004,13 @@ function QRSystem() {
                       className="book-select-badge"
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (hasActiveOrder) {
+                          showAlert(`Anda sedang memiliki pesanan aktif (${activeOrder.ticket_code}) di ${activeOrder.table_no}. Selesaikan pesanan Anda terlebih dahulu sebelum memesan buku lain.`, {
+                            type: 'warning',
+                            title: 'Mode Lihat Saja'
+                          });
+                          return;
+                        }
                         toggleBook(book);
                       }}
                       style={{
@@ -599,11 +1018,33 @@ function QRSystem() {
                         top: '10px',
                         right: '10px',
                         zIndex: 4,
-                        cursor: 'pointer'
+                        cursor: hasActiveOrder ? 'default' : 'pointer'
                       }}
-                      title={isSelected ? "Batalkan pilihan pinjam" : "Pilih buku ini untuk dipinjam"}
+                      title={
+                        hasActiveOrder
+                          ? `Pesanan aktif (${activeOrder.ticket_code}) sedang berjalan. Selesaikan dahulu sebelum memesan buku lain.`
+                          : isSelected
+                          ? "Batalkan pilihan pinjam"
+                          : "Pilih buku ini untuk dipinjam"
+                      }
                     >
-                      {isSelected ? (
+                      {hasActiveOrder ? (
+                        <div style={{
+                          background: 'rgba(15, 23, 42, 0.8)',
+                          border: '1px solid rgba(255, 255, 255, 0.25)',
+                          color: '#94a3b8',
+                          borderRadius: '14px',
+                          padding: '3px 8px',
+                          fontSize: '0.68rem',
+                          fontWeight: '700',
+                          backdropFilter: 'blur(4px)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          <Lock size={11} color="#f59e0b" /> Lihat
+                        </div>
+                      ) : isSelected ? (
                         <div style={{ 
                           width: '28px', 
                           height: '28px', 
@@ -796,57 +1237,46 @@ function QRSystem() {
           )}
 
           {/* ========================================================= */}
-          {/* FLOATING ACTION BAR: KONFIRMASI PEMESANAN BUKU */}
+          {/* DESKTOP ORDER BAR: STICKY DI BAWAH (HANYA DESKTOP) */}
           {/* ========================================================= */}
-          {selectedBooks.length > 0 && (
-            <div className="floating-order-bar" style={{ 
-              position: 'sticky', 
-              bottom: '1.5rem', 
-              marginTop: '2.5rem', 
-              background: 'linear-gradient(135deg, rgba(20, 24, 38, 0.95), rgba(15, 17, 26, 0.98))', 
-              border: '1.5px solid var(--primary-color)', 
-              borderRadius: '16px', 
-              padding: '1rem 1.4rem', 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center', 
-              boxShadow: '0 12px 30px rgba(0,0,0,0.5)', 
-              backdropFilter: 'blur(12px)', 
-              zIndex: 100, 
-              flexWrap: 'wrap', 
-              gap: '1rem' 
-            }}>
-              <div>
-                <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px', color: '#a5b4fc', fontWeight: '700' }}>
-                  Keranjang Pinjam ({selectedBooks.length}/3 Buku)
+          {selectedBooks.length > 0 && !hasActiveOrder && (
+            <div className="desktop-order-bar">
+              <div className="floating-order-info">
+                <div className="floating-order-badge-row">
+                  <span className="floating-order-tag">
+                    KERANJANG PINJAM
+                  </span>
+                  <span className="floating-order-count">
+                    ({selectedBooks.length}/3 Buku)
+                  </span>
                 </div>
-                <div style={{ fontSize: '0.95rem', fontWeight: '600', color: '#fff', marginTop: '2px' }}>
-                  {selectedBooks.map(b => b.title).join(' • ')}
+                <div className="floating-order-titles" title={selectedBooks.map(b => b.title).join(' • ')}>
+                  📚 {selectedBooks.map(b => b.title).join(' • ')}
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+              <div className="floating-order-actions">
                 <button 
-                  className="btn btn-secondary" 
+                  type="button"
+                  className="btn btn-secondary floating-order-btn-cancel" 
                   onClick={() => setSelectedBooks([])}
-                  style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
                 >
                   Batal
                 </button>
 
                 <button 
-                  className="btn" 
+                  type="button"
+                  className="btn floating-order-btn-submit" 
                   onClick={handleSubmitOrder} 
                   disabled={isSubmitting}
-                  style={{ padding: '0.65rem 1.6rem', fontSize: '0.95rem', background: 'var(--primary-color)', boxShadow: '0 0 15px var(--primary-glow)' }}
                 >
                   {isSubmitting ? (
                     <>
-                      <Loader2 size={16} className="animate-spin" /> Memproses Tiket...
+                      <Loader2 size={16} className="animate-spin" /> Memproses...
                     </>
                   ) : (
                     <>
-                      <Send size={18} /> Pesan {selectedBooks.length} Buku Sekarang
+                      <Send size={16} /> Pesan {selectedBooks.length} Buku Sekarang
                     </>
                   )}
                 </button>
@@ -867,7 +1297,96 @@ function QRSystem() {
             </span>
             <h1 style={{ marginTop: '0.5rem', fontSize: '1.8rem' }}>Tiket Pengambilan Digital</h1>
             <p style={{ color: 'var(--text-muted)' }}>Tunjukkan nomor tiket ini ke staf saat penyerahan buku</p>
+
+            {/* Tombol Cepat Jelajah Katalog Sambil Menunggu */}
+            <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="btn btn-secondary"
+                style={{
+                  padding: '0.55rem 1.35rem',
+                  borderRadius: '24px',
+                  fontSize: '0.86rem',
+                  fontWeight: '600',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  borderColor: 'rgba(99, 102, 241, 0.4)',
+                  color: '#e0e7ff',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 15px rgba(0, 0, 0, 0.25)'
+                }}
+              >
+                <BookOpen size={16} color="#818cf8" />
+                <span>Lihat-Lihat Buku Lain di Katalog</span>
+                <ArrowRight size={14} color="#818cf8" />
+              </button>
+            </div>
+
+            {/* Banner Izin Notifikasi Web Push di HP */}
+            {notifPermission === 'default' && (
+              <div style={{
+                margin: '1rem auto 0',
+                maxWidth: '460px',
+                background: 'rgba(99, 102, 241, 0.12)',
+                border: '1.5px solid rgba(99, 102, 241, 0.45)',
+                borderRadius: '12px',
+                padding: '0.8rem 1.1rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '0.8rem',
+                textAlign: 'left'
+              }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: '700', fontSize: '0.88rem', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Bell size={16} color="#fbbf24" /> Aktifkan Notifikasi di HP
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#cbd5e1', marginTop: '2px' }}>
+                    Agar HP berbunyi saat dipanggil staf, meskipun buka aplikasi lain
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={requestNotifPermission}
+                  className="btn"
+                  style={{
+                    padding: '0.45rem 0.9rem',
+                    fontSize: '0.78rem',
+                    fontWeight: '700',
+                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                    borderRadius: '8px'
+                  }}
+                >
+                  Izinkan 🔔
+                </button>
+              </div>
+            )}
+
+            {notifPermission === 'granted' && (
+              <div style={{
+                margin: '0.8rem auto 0',
+                maxWidth: '460px',
+                background: 'rgba(16, 185, 129, 0.1)',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                borderRadius: '10px',
+                padding: '0.45rem 1rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                fontSize: '0.78rem',
+                color: '#6ee7b7',
+                fontWeight: '600'
+              }}>
+                <CheckCircle2 size={15} /> Notifikasi HP Aktif (HP akan berbunyi saat dipanggil staf)
+              </div>
+            )}
           </div>
+
 
           <div className="ticket-wrapper">
             <div className="ticket-container">
@@ -1057,7 +1576,7 @@ function QRSystem() {
                   <span>
                     {activeOrder.status === 'completed' 
                       ? 'Pesanan telah selesai. Anda dapat memberikan rating bintang atau memesan buku baru.'
-                      : `Layar terkunci pada tiket ${activeOrder.ticket_code} agar antrean buku Anda tidak terganggu.`}
+                      : 'Sambil menunggu, Anda dapat melihat-lihat koleksi buku lain di katalog. Suara bel akan tetap berbunyi di HP Anda begitu buku siap!'}
                   </span>
                 </div>
               </div>
@@ -1065,15 +1584,24 @@ function QRSystem() {
           </div>
 
           {/* Area Tombol Navigasi Bawah */}
-          <div style={{ textAlign: 'center', marginTop: '1.2rem' }}>
+          <div style={{ textAlign: 'center', marginTop: '1.2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.9rem' }}>
             {activeOrder.status === 'completed' && (
-              <button 
-                className="btn" 
-                onClick={handleOrderNewBooks}
-                style={{ padding: '0.75rem 2rem', fontSize: '0.95rem', background: 'var(--primary-color)', boxShadow: '0 0 20px var(--primary-glow)' }}
-              >
-                <Plus size={18} /> Pesan Buku Baru
-              </button>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <button 
+                  className="btn" 
+                  onClick={handleOrderNewBooks}
+                  style={{ padding: '0.75rem 2rem', fontSize: '0.95rem', background: 'var(--primary-color)', boxShadow: '0 0 20px var(--primary-glow)' }}
+                >
+                  <Plus size={18} /> Pesan Buku Baru
+                </button>
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={() => setStep(1)}
+                  style={{ padding: '0.75rem 1.6rem', fontSize: '0.95rem', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <BookOpen size={18} /> Lihat Koleksi Buku
+                </button>
+              </div>
             )}
 
             {activeOrder.status === 'pending' && (
@@ -1091,9 +1619,31 @@ function QRSystem() {
               </div>
             )}
 
-            {(activeOrder.status === 'searching' || activeOrder.status === 'ready') && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.85rem', background: 'rgba(0,0,0,0.3)', padding: '0.5rem 1.2rem', borderRadius: '20px' }}>
-                <Clock size={14} /> Pesanan aktif sedang berjalan. Harap ambil buku di meja staf terlebih dahulu.
+            {(activeOrder.status === 'searching' || activeOrder.status === 'ready' || activeOrder.status === 'pending') && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+                <button 
+                  type="button"
+                  className="btn btn-secondary" 
+                  onClick={() => setStep(1)}
+                  style={{ 
+                    padding: '0.65rem 1.5rem', 
+                    fontSize: '0.9rem', 
+                    borderRadius: '24px', 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    gap: '8px',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    borderColor: 'rgba(99, 102, 241, 0.35)',
+                    color: '#e0e7ff'
+                  }}
+                >
+                  <BookOpen size={17} color="#818cf8" />
+                  <span>Lihat-Lihat Buku Lain di Katalog Sambil Menunggu</span>
+                </button>
+
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.8rem', background: 'rgba(0,0,0,0.3)', padding: '0.45rem 1.2rem', borderRadius: '20px' }}>
+                  <Clock size={14} /> Pesanan aktif sedang berjalan. Selesaikan pesanan tiket ini sebelum memesan buku lain.
+                </div>
               </div>
             )}
           </div>
@@ -1103,29 +1653,45 @@ function QRSystem() {
       {/* ========================================================= */}
       {/* MODAL PENILAIAN BUKU PEMBACA (GAMBAR YANG DIKIRIM USER) */}
       {/* ========================================================= */}
-      {rateModalBook && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(6px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '1rem'
-        }}>
-          <div style={{
-            background: 'var(--surface-color, #131722)',
-            border: '1.5px solid rgba(250, 204, 21, 0.35)',
-            borderRadius: '16px',
-            padding: '1.8rem',
-            maxWidth: '460px',
-            width: '100%',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
-            textAlign: 'center',
-            position: 'relative'
-          }}>
+      {/* ========================================================= */}
+      {/* MODAL PENILAIAN BUKU PEMBACA (GAMBAR YANG DIKIRIM USER) */}
+      {/* ========================================================= */}
+      {rateModalBook && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="rate-modal-backdrop"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.85)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 999999,
+            padding: '1rem',
+            overflowY: 'auto'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setRateModalBook(null);
+          }}
+        >
+          <div 
+            className="rate-modal-card"
+            style={{
+              background: 'var(--surface-color, #131722)',
+              border: '1.5px solid rgba(250, 204, 21, 0.35)',
+              borderRadius: '20px',
+              padding: '1.5rem 1.25rem',
+              maxWidth: '450px',
+              width: '92%',
+              boxShadow: '0 25px 50px rgba(0,0,0,0.85), 0 0 30px rgba(250, 204, 21, 0.2)',
+              textAlign: 'center',
+              position: 'relative',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+          >
             {ratingSuccessMsg ? (
               <div style={{ padding: '1.5rem 0' }}>
                 <CheckCircle2 size={48} color="var(--success)" style={{ margin: '0 auto 1rem auto' }} />
@@ -1277,7 +1843,8 @@ function QRSystem() {
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

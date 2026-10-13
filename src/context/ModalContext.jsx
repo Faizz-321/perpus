@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertCircle, CheckCircle2, Info, HelpCircle, X } from 'lucide-react';
 
 const ModalContext = createContext(null);
@@ -117,6 +118,18 @@ export function ModalProvider({ children }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [modalState.isOpen]);
 
+  // Lock scroll saat modal konfirmasi/alert terbuka
+  useEffect(() => {
+    if (modalState.isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [modalState.isOpen]);
+
   // Tema warna icon & border berdasarkan tipe
   const getTheme = () => {
     switch (modalState.type) {
@@ -162,21 +175,22 @@ export function ModalProvider({ children }) {
     <ModalContext.Provider value={{ showAlert, showConfirm }}>
       {children}
 
-      {/* Modal Popup di Tengah Layar */}
-      {modalState.isOpen && (
+      {/* Modal Popup Universal via Portal agar selalu tepat di tengah layar viewport tanpa scroll */}
+      {modalState.isOpen && typeof document !== 'undefined' && createPortal(
         <div 
           className="custom-modal-backdrop"
           style={{
             position: 'fixed',
             inset: 0,
             zIndex: 999999,
-            background: 'rgba(8, 11, 20, 0.8)',
+            background: 'rgba(8, 11, 20, 0.85)',
             backdropFilter: 'blur(8px)',
             WebkitBackdropFilter: 'blur(8px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '1.2rem',
+            padding: '1rem',
+            overflowY: 'auto',
           }}
           onClick={handleCancel}
         >
@@ -186,13 +200,17 @@ export function ModalProvider({ children }) {
               background: 'linear-gradient(145deg, #1e2438, #141829)',
               border: `1.5px solid ${theme.border}`,
               borderRadius: '20px',
-              padding: '2.2rem 2rem 1.8rem 2rem',
+              padding: '2rem 1.8rem 1.6rem 1.8rem',
               maxWidth: '430px',
               width: '100%',
               boxShadow: `0 25px 50px rgba(0,0,0,0.8), 0 0 35px ${theme.glow}`,
               textAlign: 'center',
               position: 'relative',
               cursor: 'default',
+              marginTop: '0.5rem',
+              marginBottom: '2rem',
+              maxHeight: '94vh',
+              overflowY: 'auto',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -317,7 +335,8 @@ export function ModalProvider({ children }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </ModalContext.Provider>
   );

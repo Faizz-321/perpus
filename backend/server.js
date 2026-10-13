@@ -3,9 +3,6 @@ const mysql = require('mysql2');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-<<<<<<< HEAD
-=======
-
 // Muat variabel dari backend/.env (opsional, misal GEMINI_API_KEY untuk pembaca sampul AI)
 try {
   process.loadEnvFile(path.join(__dirname, '.env'));
@@ -14,7 +11,7 @@ try {
 }
 
 const COVERS_DIR = path.join(__dirname, '../public/covers');
->>>>>>> d8a935a1542f332fdb77a5846deeedc7ff10698e
+
 
 const app = express();
 
@@ -22,19 +19,13 @@ const app = express();
 // MIDDLEWARE
 // ==========================================
 app.use(cors());
-<<<<<<< HEAD
-app.use(express.json({ limit: '25mb' }));
-app.use(express.urlencoded({ limit: '25mb', extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/original/monograf', express.static(path.join(__dirname, '../original/Monograf')));
 app.use('/original/Monograf', express.static(path.join(__dirname, '../original/Monograf')));
 app.use('/original', express.static(path.join(__dirname, '../original')));
 app.use('/covers', express.static(path.join(__dirname, '../original/Monograf')));
-app.use('/covers', express.static(path.join(__dirname, '../public/covers')));
-=======
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/covers', express.static(COVERS_DIR));
->>>>>>> d8a935a1542f332fdb77a5846deeedc7ff10698e
 
 // Helper simpan Base64 gambar ke file fisik di folder public/covers
 function saveBase64Image(base64Data) {
@@ -46,7 +37,6 @@ function saveBase64Image(base64Data) {
     }
     return null;
   }
-<<<<<<< HEAD
   const mime = matches[1].toLowerCase();
   const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpeg';
   const buffer = Buffer.from(matches[2], 'base64');
@@ -57,6 +47,34 @@ function saveBase64Image(base64Data) {
   }
   fs.writeFileSync(path.join(coversDir, filename), buffer);
   return `/covers/${filename}`;
+}
+
+// Helper simpan Base64 foto bukti serah terima ke file fisik di folder public/covers
+function saveProofPhotoImage(base64Data, id) {
+  if (!base64Data) return null;
+  const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+  if (!matches || matches.length !== 3) {
+    if (base64Data.startsWith('http') || base64Data.startsWith('/covers/') || base64Data.startsWith('/original/')) {
+      return base64Data;
+    }
+    return base64Data;
+  }
+  try {
+    const mime = matches[1].toLowerCase();
+    const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpeg';
+    const buffer = Buffer.from(matches[2], 'base64');
+    const filename = `proof_${id || 'lf'}_${Date.now()}_${Math.floor(100 + Math.random() * 900)}.${ext}`;
+    const coversDir = path.join(__dirname, '../public/covers');
+    if (!fs.existsSync(coversDir)) {
+      fs.mkdirSync(coversDir, { recursive: true });
+    }
+    fs.writeFileSync(path.join(coversDir, filename), buffer);
+    console.log(`📸 Foto bukti serah terima berhasil disimpan ke file fisik: /covers/${filename} (${buffer.length} bytes)`);
+    return `/covers/${filename}`;
+  } catch (err) {
+    console.warn('⚠️ Gagal menyimpan foto bukti ke disk fisik, fallback ke base64:', err.message);
+    return base64Data;
+  }
 }
 
 // ==========================================
@@ -228,7 +246,10 @@ function setupAllTables() {
     pool.query('ALTER TABLE orders MODIFY COLUMN book_title TEXT NOT NULL', () => {});
     pool.query('ALTER TABLE orders MODIFY COLUMN ticket_code VARCHAR(50) NOT NULL', () => {});
     pool.query('ALTER TABLE orders MODIFY COLUMN table_no VARCHAR(100) NOT NULL', () => {});
+    pool.query('ALTER TABLE orders ADD COLUMN call_count INT DEFAULT 0', () => {});
+    pool.query('ALTER TABLE orders ADD COLUMN last_called_at DATETIME NULL', () => {});
   });
+
 
   // 4. Tabel Status Meja & Real-Time Occupancy (library_tables)
   pool.query(`
@@ -293,13 +314,10 @@ function setupAllTables() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
-  // 5. Tabel Lost & Found (Barang Tertinggal & Laporan Pengunjung)
-=======
-  console.log('✅ Berhasil terhubung ke database MySQL (bibliotech_db) di XAMPP!');
-  connection.release();
+  // 6. Inisialisasi tabel lost_found & kolom ekstra
   initLostFoundTable();
   initBooksExtraColumns();
-});
+}
 
 // Tambah kolom penerbit & tahun terbit pada tabel books (untuk fitur import massal)
 function initBooksExtraColumns() {
@@ -314,7 +332,6 @@ function initBooksExtraColumns() {
 
 // Inisialisasi tabel lost_found & kolom bukti foto
 function initLostFoundTable() {
->>>>>>> d8a935a1542f332fdb77a5846deeedc7ff10698e
   pool.query(`
     CREATE TABLE IF NOT EXISTS lost_found (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -470,8 +487,12 @@ app.put('/api/orders/:id', checkDb, (req, res) => {
     return res.status(400).json({ error: 'Status tidak valid' });
   }
 
-  const query = 'UPDATE orders SET status = ? WHERE id = ?';
-  pool.query(query, [status, id], (err, result) => {
+  const isReady = status === 'ready';
+  const query = isReady
+    ? 'UPDATE orders SET status = ?, call_count = COALESCE(call_count, 0) + 1, last_called_at = NOW() WHERE id = ?'
+    : 'UPDATE orders SET status = ? WHERE id = ?';
+
+  pool.query(query, isReady ? [status, id] : [status, id], (err, result) => {
     if (err) {
       console.error('Error PUT /api/orders/:id:', err);
       return res.status(500).json({ error: 'Gagal mengupdate status pesanan', detail: err.message });
@@ -482,6 +503,26 @@ app.put('/api/orders/:id', checkDb, (req, res) => {
     res.json({ message: 'Status pesanan berhasil diperbarui!', id, status });
   });
 });
+
+// Endpoint Panggil / Panggil Ulang Pesanan ke HP Pengunjung
+app.post('/api/orders/:id/call', checkDb, (req, res) => {
+  const { id } = req.params;
+  const query = 'UPDATE orders SET call_count = COALESCE(call_count, 0) + 1, last_called_at = NOW() WHERE id = ?';
+  pool.query(query, [id], (err, result) => {
+    if (err) {
+      console.error('Error POST /api/orders/:id/call:', err);
+      return res.status(500).json({ error: 'Gagal memanggil pesanan', detail: err.message });
+    }
+    pool.query('SELECT * FROM orders WHERE id = ?', [id], (err2, rows) => {
+      res.json({
+        message: 'Pesanan berhasil dipanggil!',
+        id,
+        order: (rows && rows[0]) || null
+      });
+    });
+  });
+});
+
 
 // Hapus semua pesanan yang sudah selesai atau dibatalkan (Bersihkan riwayat)
 app.delete('/api/orders/cleanup/completed', checkDb, (req, res) => {
@@ -514,7 +555,6 @@ app.delete('/api/orders/:id', checkDb, (req, res) => {
 // ------------------------------------------
 // FITUR 2: BOOKS (Katalog Buku & Rating)
 // ------------------------------------------
-<<<<<<< HEAD
 
 // Ambil katalog buku (dioptimalkan hanya mengirim kolom yang dibutuhkan UI agar loading cepat & ringan)
 app.get('/api/books', checkDb, (req, res) => {
@@ -556,12 +596,6 @@ app.get('/api/books', checkDb, (req, res) => {
   }
 
   pool.query(query, params, (err, results) => {
-=======
-// Ambil katalog buku
-app.get('/api/books', (req, res) => {
-  const query = 'SELECT * FROM books ORDER BY id ASC';
-  pool.query(query, (err, results) => {
->>>>>>> d8a935a1542f332fdb77a5846deeedc7ff10698e
     if (err) {
       console.error('Error GET /api/books:', err);
       return res.status(500).json({ error: 'Gagal mengambil katalog buku', detail: err.message });
@@ -1301,30 +1335,34 @@ app.put('/api/lost-found/:id/handover', checkDb, (req, res) => {
   const { id } = req.params;
   const { claimed_by, proof_photo, staff_notes } = req.body;
 
-  if (!claimed_by) {
+  if (!claimed_by || !claimed_by.trim()) {
     return res.status(400).json({ error: 'Nama penerima barang wajib diisi sebagai bukti serah terima' });
   }
+
+  // Simpan foto bukti jika berupa base64 ke file fisik disk di folder public/covers
+  const finalProofPhoto = saveProofPhotoImage(proof_photo, id);
 
   const query = `
     UPDATE lost_found 
     SET 
       status = 'claimed', 
       claimed_by = ?, 
-      claimed_at = NOW(), 
-      proof_photo = ?, 
+      claimed_at = IF(claimed_at IS NULL, NOW(), claimed_at), 
+      proof_photo = COALESCE(?, proof_photo), 
       staff_notes = ? 
     WHERE id = ?
   `;
 
-  pool.query(query, [claimed_by, proof_photo || null, staff_notes || null, id], (err, result) => {
+  pool.query(query, [claimed_by.trim(), finalProofPhoto || null, staff_notes ? staff_notes.trim() : null, id], (err, result) => {
     if (err) {
       console.error('Error PUT /api/lost-found/:id/handover:', err);
-      return res.status(500).json({ error: 'Gagal mencatat bukti serah terima', detail: err.message });
+      return res.status(500).json({ error: 'Gagal mencatat bukti serah terima di database', detail: err.message });
     }
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Data barang tidak ditemukan' });
+      return res.status(404).json({ error: 'Data barang tidak ditemukan di database' });
     }
-    res.json({ message: 'Barang berhasil diserahkan dan foto bukti telah disimpan!', id });
+    console.log(`✅ Bukti serah terima barang #${id} berhasil disimpan untuk ${claimed_by}. Foto: ${finalProofPhoto ? 'Tersimpan' : 'Kosong'}`);
+    res.json({ message: 'Barang berhasil diserahkan dan foto bukti telah disimpan!', id, proof_photo: finalProofPhoto });
   });
 });
 
