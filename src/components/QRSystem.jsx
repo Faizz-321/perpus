@@ -1396,8 +1396,9 @@ function QRSystem() {
 
               {/* Header Tiket */}
               <div className="ticket-header">
-                <div style={{ fontSize: '0.8rem', letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                  <img src="/Lambang.png" alt="Logo" style={{ width: '18px', height: '18px', objectFit: 'contain' }} />
+                <div style={{ fontSize: '0.8rem', letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <img src="/Lambang.png" alt="Lambang" style={{ width: '20px', height: '20px', objectFit: 'contain' }} />
+                  <img src="/logo-perpus.png" alt="Logo Perpus" style={{ width: '20px', height: '20px', objectFit: 'contain' }} onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
                   PERPUSTAKAAN UMUM KOTA PAREPARE
                 </div>
 

@@ -29,7 +29,10 @@ function CustomerNav({ onLogout }) {
   return (
     <header className="app-header">
       <Link to="/" className="logo-area">
-        <img src="/Lambang.png" alt="Lambang Kota Parepare" className="logo-img" />
+        <div className="logos-group">
+          <img src="/Lambang.png" alt="Lambang Kota Parepare" className="logo-img" />
+          <img src="/logo-perpus.png" alt="Logo Dinas Perpustakaan" className="logo-img" onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
+        </div>
         <span className="logo-title">Perpustakaan Umum Kota Parepare</span>
       </Link>
 
@@ -132,7 +135,10 @@ function StaffNav({ onLogout, notifCount }) {
   return (
     <header className="app-header" style={{ borderBottom: '1px solid rgba(16,185,129,0.3)' }}>
       <Link to="/staff" className="logo-area">
-        <img src="/Lambang.png" alt="Lambang Kota Parepare" className="logo-img" />
+        <div className="logos-group">
+          <img src="/Lambang.png" alt="Lambang Kota Parepare" className="logo-img" />
+          <img src="/logo-perpus.png" alt="Logo Dinas Perpustakaan" className="logo-img" onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
+        </div>
         <span className="logo-title">
           Perpustakaan Umum Kota Parepare
           <span style={{ display: 'block', fontSize: '0.72rem', color: '#10b981', fontWeight: '600', letterSpacing: '0.5px' }}>

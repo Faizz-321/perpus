@@ -7,6 +7,11 @@ function Home() {
   return (
     <div className="glass-panel home-hero-panel">
       <div className="page-header">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginBottom: '1.2rem' }}>
+          <img src="/Lambang.png" alt="Lambang Kota Parepare" style={{ height: '62px', width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.5))' }} />
+          <div style={{ width: '1.5px', height: '44px', background: 'rgba(255,255,255,0.2)' }} />
+          <img src="/logo-perpus.png" alt="Logo Dinas Perpustakaan Parepare" style={{ height: '62px', width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.5))' }} onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
+        </div>
         <h1>Selamat Datang di Perpustakaan Umum Kota Parepare</h1>
         <p>Sistem layanan perpustakaan pintar & pemesanan buku digital</p>
       </div>
