@@ -6,15 +6,17 @@ import {
   Filter, Volume2, VolumeX, BellRing, Bell, Trash2, Package, Camera, Upload, Eye, X, 
   AlertCircle, Plus, User, CheckCircle2, Phone, MapPin, MessageCircle, BookOpen, 
   Edit3, Image, Star, Globe, Layers, Save, BookPlus, ShieldCheck, Sparkles, Menu, ChevronDown, LayoutGrid,
-  ChevronLeft, ChevronRight, Library
+  ChevronLeft, ChevronRight, Library, QrCode
 } from 'lucide-react';
 import { announceTableOrder, playNewOrderAlarm } from '../utils/soundAnnouncement';
 import { useModal } from '../context/ModalContext';
 import { parseOrderBookTitles } from '../utils/orderBooks';
 import BulkBookImport from './BulkBookImport';
+import TableQRModal from './TableQRModal';
 
 function StaffDashboard() {
   const { showAlert, showConfirm } = useModal();
+  const [showTableQrModal, setShowTableQrModal] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTabParam = searchParams.get('tab');
   const activeModule = (currentTabParam === 'lost_found' || currentTabParam === 'import_books' || currentTabParam === 'books')
@@ -1302,6 +1304,17 @@ function StaffDashboard() {
 
                 <button 
                   type="button"
+                  className="orders-utility-btn" 
+                  onClick={() => setShowTableQrModal(true)}
+                  title="Buka generator & cetak stiker Barcode Meja (QR Code) untuk ditempel di meja pengunjung"
+                  style={{ color: '#34d399' }}
+                >
+                  <QrCode size={15} color="#10b981" />
+                  <span className="utility-label">Stiker Barcode Meja</span>
+                </button>
+
+                <button 
+                  type="button"
                   className="orders-utility-btn orders-refresh-btn" 
                   onClick={fetchOrders}
                   title="Segarkan antrean pesanan"
@@ -2219,6 +2232,26 @@ function StaffDashboard() {
             </div>
 
             <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button 
+                type="button"
+                className="btn btn-primary"
+                style={{ 
+                  background: 'linear-gradient(135deg, #10b981, #059669)', 
+                  border: 'none', 
+                  color: '#fff', 
+                  fontWeight: '700', 
+                  padding: '0.55rem 1.1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                }}
+                onClick={() => setShowTableQrModal(true)}
+                title="Buka generator & cetak stiker Barcode Meja (QR Code) untuk ditempel di meja pengunjung"
+              >
+                <QrCode size={16} /> Cetak Barcode Meja
+              </button>
+
               <button 
                 className="btn btn-secondary"
                 style={{ padding: '0.55rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
@@ -3648,6 +3681,12 @@ function StaffDashboard() {
         </div>,
         document.body
       )}
+
+      {/* Modal Generator & Cetak Barcode Meja */}
+      <TableQRModal 
+        isOpen={showTableQrModal} 
+        onClose={() => setShowTableQrModal(false)} 
+      />
     </div>
   );
 }

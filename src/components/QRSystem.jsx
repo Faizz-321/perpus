@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Send, Loader2, Ticket, CheckCircle2, Clock, Search, BookOpen, AlertCircle, XCircle, Plus, Check, ChevronLeft, ChevronRight, ChevronDown, Bookmark, MapPin, Volume2, Star, Flame, Sparkles, MessageSquare, Bell, Lock, Eye, ArrowRight, History, Trash2 } from 'lucide-react';
 import { announceTableOrder } from '../utils/soundAnnouncement';
 import { useModal } from '../context/ModalContext';
 import { parseOrderBookTitles, serializeOrderBookTitles } from '../utils/orderBooks';
+import { normalizeTableParam, ALL_LIBRARY_TABLES } from '../utils/tableUtils';
 
 // Kunci penyimpanan localStorage
 const ORDER_HISTORY_KEY = 'bibliotech_order_history';
@@ -60,10 +62,32 @@ function getThemeForBook(id, title) {
 
 function QRSystem() {
   const { showAlert, showConfirm } = useModal();
+  const [searchParams] = useSearchParams();
+  const urlTableRaw = searchParams.get('meja') || searchParams.get('table') || searchParams.get('m') || searchParams.get('t');
+  const detectedTableFromUrl = useMemo(() => normalizeTableParam(urlTableRaw), [urlTableRaw]);
+  const [isAutoDetectedFromQr, setIsAutoDetectedFromQr] = useState(() => Boolean(detectedTableFromUrl));
+
   const [step, setStep] = useState(1);
   const [tableNo, setTableNo] = useState(() => {
+    if (detectedTableFromUrl) {
+      try {
+        localStorage.setItem(TABLE_NO_KEY, detectedTableFromUrl);
+      } catch (e) {}
+      return detectedTableFromUrl;
+    }
     return localStorage.getItem(TABLE_NO_KEY) || '';
   });
+
+  // Sinkronisasi otomatis jika pengunjung scan QR Code meja lain
+  useEffect(() => {
+    if (detectedTableFromUrl) {
+      setTableNo(detectedTableFromUrl);
+      try {
+        localStorage.setItem(TABLE_NO_KEY, detectedTableFromUrl);
+      } catch (e) {}
+      setIsAutoDetectedFromQr(true);
+    }
+  }, [detectedTableFromUrl]);
   
   // Data buku dan filter
   const [books, setBooks] = useState([]);
@@ -940,26 +964,109 @@ function QRSystem() {
             <p>Koleksi Buku Resmi <strong>Perpustakaan Umum Kota Parepare</strong></p>
           </div>
 
-          {/* Pemilihan Nomor Meja Pengunjung */}
-          <div style={{ maxWidth: '420px', margin: '0 auto 2rem auto', background: 'rgba(0,0,0,0.25)', padding: '1.2rem', borderRadius: '14px', border: '1px solid var(--surface-border)' }}>
-            <label style={{ display: 'block', textAlign: 'center', fontWeight: '600', marginBottom: '0.6rem' }}>
-              📍 Anda Duduk di Meja Berapa?
-            </label>
-            <select 
-              className="form-control" 
-              value={tableNo} 
-              onChange={(e) => {
-                setTableNo(e.target.value);
-                localStorage.setItem(TABLE_NO_KEY, e.target.value);
-              }}
-              disabled={hasActiveOrder}
-              style={{ background: 'rgba(25, 27, 36, 0.95)', fontSize: '1rem', fontWeight: '600', opacity: hasActiveOrder ? 0.75 : 1, cursor: hasActiveOrder ? 'not-allowed' : 'pointer' }}
-            >
-              <option value="" disabled>-- Pilih Nomor Meja Anda --</option>
-              {tables.map(table => (
-                <option key={table} value={table}>{table}</option>
-              ))}
-            </select>
+          {/* Pemilihan / Deteksi Nomor Meja Pengunjung */}
+          <div style={{ 
+            maxWidth: '440px', 
+            margin: '0 auto 2rem auto', 
+            background: isAutoDetectedFromQr ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.16), rgba(6, 78, 59, 0.28))' : 'rgba(0,0,0,0.25)', 
+            padding: '1.25rem', 
+            borderRadius: '16px', 
+            border: isAutoDetectedFromQr ? '1.5px solid rgba(16, 185, 129, 0.55)' : '1px solid var(--surface-border)',
+            boxShadow: isAutoDetectedFromQr ? '0 8px 24px rgba(16, 185, 129, 0.18)' : 'none',
+            transition: 'all 0.3s ease'
+          }}>
+            {isAutoDetectedFromQr && tableNo ? (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ 
+                  display: 'inline-flex', 
+                  alignItems: 'center', 
+                  gap: '6px', 
+                  background: 'rgba(16, 185, 129, 0.25)', 
+                  color: '#34d399', 
+                  padding: '4px 12px', 
+                  borderRadius: '20px', 
+                  fontSize: '0.78rem', 
+                  fontWeight: '700', 
+                  marginBottom: '0.6rem',
+                  border: '1px solid rgba(16, 185, 129, 0.45)'
+                }}>
+                  <Sparkles size={14} /> Terdeteksi Otomatis dari Barcode Meja
+                </div>
+                
+                <div style={{ 
+                  fontSize: '1.5rem', 
+                  fontWeight: '900', 
+                  color: '#ffffff', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: '8px', 
+                  marginBottom: '0.3rem' 
+                }}>
+                  <MapPin size={24} color="#10b981" /> {tableNo}
+                </div>
+
+                <p style={{ fontSize: '0.8rem', color: '#cbd5e1', margin: '0 0 0.8rem 0', lineHeight: 1.4 }}>
+                  Pesanan buku Anda akan disiapkan dan diantar staf ke meja ini.
+                </p>
+
+                {!hasActiveOrder && (
+                  <button
+                    type="button"
+                    onClick={() => setIsAutoDetectedFromQr(false)}
+                    style={{ 
+                      background: 'none', 
+                      border: 'none', 
+                      color: '#94a3b8', 
+                      fontSize: '0.75rem', 
+                      textDecoration: 'underline', 
+                      cursor: 'pointer',
+                      padding: '4px 8px'
+                    }}
+                  >
+                    Bukan meja ini? Ganti nomor meja manual
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                <label style={{ display: 'block', textAlign: 'center', fontWeight: '600', marginBottom: '0.6rem' }}>
+                  📍 Anda Duduk di Meja Berapa?
+                </label>
+                <select 
+                  className="form-control" 
+                  value={tableNo} 
+                  onChange={(e) => {
+                    setTableNo(e.target.value);
+                    try {
+                      localStorage.setItem(TABLE_NO_KEY, e.target.value);
+                    } catch (err) {}
+                  }}
+                  disabled={hasActiveOrder}
+                  style={{ background: 'rgba(25, 27, 36, 0.95)', fontSize: '1rem', fontWeight: '600', opacity: hasActiveOrder ? 0.75 : 1, cursor: hasActiveOrder ? 'not-allowed' : 'pointer' }}
+                >
+                  <option value="" disabled>-- Pilih Nomor Meja Anda --</option>
+                  {tables.map(table => (
+                    <option key={table} value={table}>{table}</option>
+                  ))}
+                </select>
+                {detectedTableFromUrl && !isAutoDetectedFromQr && (
+                  <div style={{ textAlign: 'center', marginTop: '0.5rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTableNo(detectedTableFromUrl);
+                        setIsAutoDetectedFromQr(true);
+                      }}
+                      style={{ background: 'none', border: 'none', color: '#34d399', fontSize: '0.75rem', textDecoration: 'underline', cursor: 'pointer' }}
+                    >
+                      Kembalikan ke {detectedTableFromUrl} (dari Barcode)
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
             {hasActiveOrder && (
               <p style={{ textAlign: 'center', fontSize: '0.75rem', color: '#fbbf24', marginTop: '6px' }}>
                 🔒 Meja dikunci ke <strong>{activeOrder.table_no}</strong> karena ada pesanan berjalan.

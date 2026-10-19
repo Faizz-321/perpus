@@ -1,8 +1,18 @@
-import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BookOpen, Package } from 'lucide-react';
 
 function Home() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Jika pengunjung membuka link meja (misal dari QR Code di meja), langsung arahkan ke form pemesanan buku
+  useEffect(() => {
+    const tableParam = searchParams.get('meja') || searchParams.get('table') || searchParams.get('m') || searchParams.get('t');
+    if (tableParam) {
+      navigate(`/qr-system?${searchParams.toString()}`, { replace: true });
+    }
+  }, [searchParams, navigate]);
 
   return (
     <div className="glass-panel home-hero-panel">

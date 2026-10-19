@@ -550,7 +550,22 @@ function StaffMobileNav({ onLogout }) {
 // ======================================================
 function App() {
   const [userRole, setUserRole] = useState(() => {
-    // Cek apakah sudah login di session sebelumnya (session storage, bukan permanent)
+    // 1. Cek parameter URL: Jika pengunjung membuka link dari QR Code meja (?meja=1 atau ?table=1),
+    // otomatis tetapkan peran sebagai 'customer' agar langsung masuk ke katalog tanpa terhalang form login
+    if (typeof window !== 'undefined') {
+      try {
+        const search = new URLSearchParams(window.location.search);
+        const hasTableParam = search.get('meja') || search.get('table') || search.get('m') || search.get('t');
+        if (hasTableParam) {
+          sessionStorage.setItem('perpus_role', 'customer');
+          return 'customer';
+        }
+      } catch (e) {
+        console.warn('Gagal membaca parameter meja dari URL:', e);
+      }
+    }
+
+    // 2. Cek apakah sudah login di session sebelumnya (session storage)
     return sessionStorage.getItem('perpus_role') || null;
   });
 

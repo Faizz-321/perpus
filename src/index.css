@@ -3363,5 +3363,291 @@ body {
   transform: scale(1.04);
 }
 
+/* ======================================================== */
+/* MODAL CETAK & GENERATOR QR CODE MEJA PERPUSTAKAAN        */
+/* ======================================================== */
+.table-qr-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.2rem;
+}
 
+.table-qr-modal-dialog {
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 1060px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6);
+  animation: modalScaleIn 0.25s ease-out;
+}
 
+.table-qr-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.2rem 1.6rem;
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.table-qr-close-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.table-qr-close-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.table-qr-toolbar {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1.2rem;
+  padding: 1rem 1.6rem;
+  background: rgba(30, 41, 59, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.table-qr-scroll-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+  background: #020617;
+}
+
+.table-qr-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.6rem;
+  background: rgba(15, 23, 42, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Grid Kartu QR Meja */
+.table-qr-grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.4rem;
+}
+
+/* Desain Kartu / Stiker Fisik Meja (Hitam-Putih Elegan Siap Cetak) */
+.table-qr-card-item {
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 14px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  border: 2px dashed #cbd5e1;
+  position: relative;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.table-qr-card-header {
+  width: 100%;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1.5px solid #e2e8f0;
+}
+
+.table-qr-logos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.table-qr-logos img {
+  height: 28px;
+  width: auto;
+  object-fit: contain;
+}
+
+.table-qr-divider {
+  width: 1px;
+  height: 20px;
+  background: #cbd5e1;
+}
+
+.table-qr-agency-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #1e293b;
+}
+
+.table-qr-agency-sub {
+  font-size: 0.58rem;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: 0.3px;
+}
+
+.table-qr-image-wrapper {
+  background: #ffffff;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.table-qr-img {
+  width: 170px;
+  height: 170px;
+  object-fit: contain;
+  display: block;
+}
+
+.table-qr-placeholder {
+  width: 170px;
+  height: 170px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8fafc;
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+.table-qr-card-body {
+  width: 100%;
+}
+
+.table-qr-number-badge {
+  display: inline-block;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 1.25rem;
+  font-weight: 900;
+  letter-spacing: 1px;
+  padding: 3px 18px;
+  border-radius: 8px;
+  margin-bottom: 6px;
+}
+
+.table-qr-scan-instruction {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 6px 0;
+  line-height: 1.35;
+}
+
+.table-qr-url-text {
+  font-size: 0.55rem;
+  font-family: monospace;
+  color: #94a3b8;
+  word-break: break-all;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.table-qr-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 0.8rem;
+  width: 100%;
+  justify-content: center;
+  padding-top: 0.6rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+/* ======================================================== */
+/* MEDIA PRINT (CETAK STIKER MEJA PADA KERTAS A4)           */
+/* ======================================================== */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  .no-print,
+  .app-header,
+  .mobile-bottom-nav,
+  .table-qr-modal-header,
+  .table-qr-toolbar,
+  .table-qr-modal-footer,
+  .table-qr-card-actions {
+    display: none !important;
+  }
+
+  .table-qr-modal-overlay {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  .table-qr-modal-dialog {
+    border: none !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+
+  .table-qr-scroll-content {
+    background: transparent !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .table-qr-grid-container {
+    visibility: visible !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 1.5cm !important;
+    margin: 0.5cm auto !important;
+    width: 100% !important;
+  }
+
+  .table-qr-grid-container * {
+    visibility: visible !important;
+  }
+
+  .table-qr-card-item {
+    border: 1.5px dashed #94a3b8 !important;
+    box-shadow: none !important;
+    padding: 0.6cm !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .table-qr-img {
+    width: 160px !important;
+    height: 160px !important;
+  }
+}
