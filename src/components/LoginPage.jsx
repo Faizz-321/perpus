@@ -47,10 +47,12 @@ function LoginPage({ onLogin }) {
 
       <div style={{ width: '100%', maxWidth: '480px', position: 'relative', zIndex: 1 }}>
         <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginBottom: '1.2rem' }}>
-            <img src="/Lambang.png" alt="Lambang Kota Parepare" style={{ width: '68px', height: '68px', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(99,102,241,0.3))' }} onError={e => { e.target.style.display = 'none'; }} />
-            <div style={{ width: '1.5px', height: '44px', background: 'rgba(255,255,255,0.2)' }} />
-            <img src="/logo-perpus.png" alt="Logo Dinas Perpustakaan" style={{ width: '68px', height: '68px', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(16,185,129,0.3))' }} onError={e => { e.currentTarget.src = '/logo perpus.jpg'; }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.85rem', marginBottom: '1.2rem', flexWrap: 'wrap' }}>
+            <img src="/Lambang.png" alt="Lambang Kota Parepare" style={{ width: '64px', height: '64px', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(99,102,241,0.3))' }} onError={e => { e.target.style.display = 'none'; }} />
+            <div style={{ width: '1.5px', height: '40px', background: 'rgba(255,255,255,0.2)' }} />
+            <img src="/logo-perpus.png" alt="Logo Dinas Perpustakaan" style={{ width: '64px', height: '64px', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(16,185,129,0.3))' }} onError={e => { e.currentTarget.src = '/logo perpus.jpg'; }} />
+            <div style={{ width: '1.5px', height: '40px', background: 'rgba(255,255,255,0.2)' }} />
+            <img src="/logo-ilkom.png" alt="Logo Ilmu Komputer ITH" style={{ width: '64px', height: '64px', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(245,158,11,0.3))' }} onError={e => { e.currentTarget.src = '/logo ilkom.jpg'; }} />
           </div>
           <h1 style={{ fontSize: '1.6rem', fontWeight: '800', margin: '0 0 0.3rem', background: 'linear-gradient(135deg, #a5b4fc, #6366f1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Perpustakaan Umum</h1>
           <p style={{ color: '#6366f1', fontWeight: '600', fontSize: '1rem', margin: '0 0 0.5rem' }}>Kota Parepare</p>

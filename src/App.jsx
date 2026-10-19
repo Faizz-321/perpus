@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Component } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate, useSearchParams } from 'react-router-dom';
-import { BookOpen, Users, Package, Home as HomeIcon, Bell, LogOut, Shield, ChevronDown, Volume2, VolumeX, BookPlus } from 'lucide-react';
+import { BookOpen, Users, Package, Home as HomeIcon, Bell, LogOut, Shield, ChevronDown, Volume2, VolumeX, BookPlus, X } from 'lucide-react';
 import Home from './components/Home';
 import QRSystem from './components/QRSystem';
 import StaffDashboard from './components/StaffDashboard';
@@ -8,6 +8,43 @@ import LostFound from './components/LostFound';
 import LoginPage from './components/LoginPage';
 import { ModalProvider, useModal } from './context/ModalContext';
 import { playNewOrderAlarm } from './utils/soundAnnouncement';
+import { formatOrderBookTitles } from './utils/orderBooks';
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('ErrorBoundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '2rem', textAlign: 'center', color: '#fff', background: 'rgba(15,23,42,0.92)', margin: '2rem auto', maxWidth: '540px', borderRadius: '16px', border: '1.5px solid rgba(239,68,68,0.45)', backdropFilter: 'blur(16px)' }}>
+          <h3 style={{ color: '#f87171', marginBottom: '0.6rem', fontSize: '1.2rem' }}>Pemberitahuan Sistem</h3>
+          <p style={{ color: '#cbd5e1', fontSize: '0.88rem', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+            {this.state.error?.message || 'Sedang memuat ulang modul...'}
+          </p>
+          <button 
+            type="button"
+            onClick={() => { this.setState({ hasError: false }); window.location.reload(); }}
+            style={{ padding: '0.6rem 1.4rem', background: '#6366f1', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem' }}
+          >
+            Muat Ulang Halaman
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ======================================================
 // NAVIGASI CUSTOMER (Pengunjung)
@@ -32,6 +69,7 @@ function CustomerNav({ onLogout }) {
         <div className="logos-group">
           <img src="/Lambang.png" alt="Lambang Kota Parepare" className="logo-img" />
           <img src="/logo-perpus.png" alt="Logo Dinas Perpustakaan" className="logo-img" onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
+          <img src="/logo-ilkom.png" alt="Logo Ilmu Komputer ITH" className="logo-img" onError={(e) => { e.currentTarget.src = '/logo ilkom.jpg'; }} />
         </div>
         <span className="logo-title">Perpustakaan Umum Kota Parepare</span>
       </Link>
@@ -78,9 +116,10 @@ function StaffNav({ onLogout, notifCount }) {
   const { showConfirm } = useModal();
   const [showNotif, setShowNotif] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  const [soundEnabled, setSoundEnabled] = useState(() => {
-    return localStorage.getItem('perpus_notif_sound') !== 'false';
+  const [alarmSoundEnabled, setAlarmSoundEnabled] = useState(() => {
+    return localStorage.getItem('perpus_notif_alarm_sound') !== 'false';
   });
+  const [newOrderToast, setNewOrderToast] = useState(null);
   const prevNotifIdsRef = useRef(null);
 
   const handleStaffLogoutClick = async () => {
@@ -93,44 +132,104 @@ function StaffNav({ onLogout, notifCount }) {
     if (ok) onLogout();
   };
 
-  const toggleSound = () => {
-    const nextState = !soundEnabled;
-    setSoundEnabled(nextState);
-    localStorage.setItem('perpus_notif_sound', String(nextState));
+  const toggleAlarmSound = () => {
+    const nextState = !alarmSoundEnabled;
+    setAlarmSoundEnabled(nextState);
+    localStorage.setItem('perpus_notif_alarm_sound', String(nextState));
+    window.dispatchEvent(new CustomEvent('perpus_alarm_sound_toggle', { detail: nextState }));
     if (nextState) {
-      playNewOrderAlarm();
+      playNewOrderAlarm(true);
     }
   };
+
+  // Sinkronisasi status alarm suara jika diubah dari tempat lain
+  useEffect(() => {
+    const onAlarmSync = (e) => {
+      if (typeof e.detail === 'boolean') {
+        setAlarmSoundEnabled(e.detail);
+      }
+    };
+    window.addEventListener('perpus_alarm_sound_toggle', onAlarmSync);
+    return () => window.removeEventListener('perpus_alarm_sound_toggle', onAlarmSync);
+  }, []);
 
   const fetchNotifications = useCallback(async () => {
     try {
       const res = await fetch('/api/notifications');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data)) {
-          // Bunyikan alarm singkat jika ada pesanan baru yang masuk
+        const list = Array.isArray(data) ? data : [];
+        setNotifications(list);
+
+        // Deteksi jika ada pesanan baru yang belum pernah muncul sebelumnya
+        if (list.length > 0) {
+          const currentIds = list.map(item => item.id);
           if (prevNotifIdsRef.current !== null) {
-            const hasNewOrder = data.some(item => !prevNotifIdsRef.current.includes(item.id));
-            if (hasNewOrder && soundEnabled) {
-              playNewOrderAlarm();
+            const newlyAdded = list.filter(item => !prevNotifIdsRef.current.includes(item.id));
+            if (newlyAdded.length > 0) {
+              const latest = newlyAdded[0];
+              setNewOrderToast({
+                id: latest.id,
+                ticket: latest.ticket_code,
+                table: latest.table_no,
+                book: latest.book_title,
+                count: newlyAdded.length
+              });
             }
           }
-          prevNotifIdsRef.current = data.map(item => item.id);
+          prevNotifIdsRef.current = currentIds;
+        } else {
+          prevNotifIdsRef.current = [];
         }
-        setNotifications(data);
       }
     } catch {
       // backend mungkin belum siap
     }
-  }, [soundEnabled]);
+  }, []);
+
+  // Otomatis sembunyikan toast banner setelah 9 detik
+  useEffect(() => {
+    if (!newOrderToast) return;
+    const timer = setTimeout(() => {
+      setNewOrderToast(null);
+    }, 9000);
+    return () => clearTimeout(timer);
+  }, [newOrderToast]);
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 5000);
+    const interval = setInterval(fetchNotifications, 4000);
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 
+  // Dengarkan event ketika staf mengubah status (misal klik '1. Mulai Mencari Buku di Rak')
+  // agar notifikasi segera di-refresh dan alarm berhenti seketika tanpa menunggu jeda
+  useEffect(() => {
+    const onOrderStatusChanged = () => {
+      fetchNotifications();
+    };
+    window.addEventListener('perpus_order_status_changed', onOrderStatusChanged);
+    return () => window.removeEventListener('perpus_order_status_changed', onOrderStatusChanged);
+  }, [fetchNotifications]);
+
   const pendingCount = notifications.length;
+  const hasPendingOrders = pendingCount > 0;
+
+  // ALARM BERULANG SETIAP 15 DETIK:
+  // Berbunyi segera saat ada pesanan pending jika alarmSoundEnabled aktif
+  useEffect(() => {
+    if (!hasPendingOrders || !alarmSoundEnabled) return;
+
+    // Bunyikan langsung saat pesanan pending terdeteksi
+    playNewOrderAlarm(true);
+
+    // Ulangi setiap 15 detik selama masih ada pesanan pending
+    const alarmInterval = setInterval(() => {
+      playNewOrderAlarm(true);
+    }, 15000);
+
+    return () => clearInterval(alarmInterval);
+  }, [hasPendingOrders, alarmSoundEnabled]);
 
   return (
     <header className="app-header" style={{ borderBottom: '1px solid rgba(16,185,129,0.3)' }}>
@@ -138,6 +237,7 @@ function StaffNav({ onLogout, notifCount }) {
         <div className="logos-group">
           <img src="/Lambang.png" alt="Lambang Kota Parepare" className="logo-img" />
           <img src="/logo-perpus.png" alt="Logo Dinas Perpustakaan" className="logo-img" onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
+          <img src="/logo-ilkom.png" alt="Logo Ilmu Komputer ITH" className="logo-img" onError={(e) => { e.currentTarget.src = '/logo ilkom.jpg'; }} />
         </div>
         <span className="logo-title">
           Perpustakaan Umum Kota Parepare
@@ -215,14 +315,14 @@ function StaffNav({ onLogout, notifCount }) {
                     )}
                   </span>
                   
-                  {/* Kontrol Bunyi Alarm Notifikasi */}
+                  {/* Kontrol Bunyi Alarm Notifikasi - Di tempat yang berbeda (khusus notifikasi pesanan) */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <button
-                      onClick={(e) => { e.stopPropagation(); toggleSound(); }}
+                      onClick={(e) => { e.stopPropagation(); toggleAlarmSound(); }}
                       style={{
-                        background: soundEnabled ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-                        border: '1px solid ' + (soundEnabled ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.35)'),
-                        color: soundEnabled ? '#10b981' : '#f87171',
+                        background: alarmSoundEnabled ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                        border: '1px solid ' + (alarmSoundEnabled ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.35)'),
+                        color: alarmSoundEnabled ? '#10b981' : '#f87171',
                         borderRadius: '6px',
                         padding: '4px 8px',
                         fontSize: '0.74rem',
@@ -232,13 +332,13 @@ function StaffNav({ onLogout, notifCount }) {
                         alignItems: 'center',
                         gap: '4px'
                       }}
-                      title="Nyalakan / Matikan bunyi alarm notifikasi"
+                      title="Nyalakan / Matikan bunyi alarm notifikasi pesanan masuk"
                     >
-                      {soundEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
-                      {soundEnabled ? 'Alarm ON' : 'Mute'}
+                      {alarmSoundEnabled ? <Bell size={13} color="#10b981" /> : <VolumeX size={13} />}
+                      {alarmSoundEnabled ? 'Alarm ON' : 'Mute Alarm'}
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); playNewOrderAlarm(); }}
+                      onClick={(e) => { e.stopPropagation(); playNewOrderAlarm(true); }}
                       style={{
                         background: 'rgba(99,102,241,0.15)',
                         border: '1px solid rgba(99,102,241,0.35)',
@@ -249,9 +349,9 @@ function StaffNav({ onLogout, notifCount }) {
                         fontWeight: '700',
                         cursor: 'pointer'
                       }}
-                      title="Uji coba suara alarm"
+                      title="Uji coba nada alarm notifikasi pesanan"
                     >
-                      Tes 🔊
+                      Tes Alarm 🔔
                     </button>
                   </div>
                 </div>
@@ -275,7 +375,7 @@ function StaffNav({ onLogout, notifCount }) {
                             {n.ticket_code} — {n.table_no}
                           </div>
                           <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {n.book_title}
+                            {formatOrderBookTitles(n.book_title)}
                           </div>
                           <div style={{ color: '#fbbf24', fontSize: '0.72rem', marginTop: '2px' }}>
                             {n.created_at ? new Date(n.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : 'Baru'}
@@ -308,6 +408,46 @@ function StaffNav({ onLogout, notifCount }) {
           Keluar
         </button>
       </nav>
+
+      {/* Toast Notifikasi Pesanan Baru: Tetap Muncul Meski Alarm Mute */}
+      {newOrderToast && (
+        <div 
+          className="new-order-toast-banner" 
+          onClick={() => {
+            setShowNotif(true);
+            setNewOrderToast(null);
+          }}
+          title="Klik untuk membuka rincian pesanan"
+        >
+          <div className="new-order-toast-icon">
+            <Bell size={20} color="#fbbf24" />
+          </div>
+          <div className="new-order-toast-content">
+            <div className="new-order-toast-title">
+              🔔 Pesanan Baru Masuk! {newOrderToast.count > 1 ? `(${newOrderToast.count} Pesanan)` : ''}
+              {!alarmSoundEnabled && (
+                <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#f87171', background: 'rgba(239,68,68,0.15)', padding: '1px 5px', borderRadius: '4px', marginLeft: '6px' }}>
+                  Hening
+                </span>
+              )}
+            </div>
+            <div className="new-order-toast-meta">
+              <strong>{newOrderToast.ticket}</strong> • {newOrderToast.table}
+            </div>
+            <div className="new-order-toast-book">
+              {formatOrderBookTitles(newOrderToast.book)}
+            </div>
+          </div>
+          <button 
+            type="button" 
+            className="new-order-toast-close"
+            onClick={(e) => { e.stopPropagation(); setNewOrderToast(null); }}
+            title="Tutup pemberitahuan"
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
     </header>
   );
 }
@@ -441,10 +581,12 @@ function App() {
           <div className="app-container">
             <StaffNav onLogout={handleLogout} />
             <main>
-              <Routes>
-                <Route path="/staff" element={<StaffDashboard />} />
-                <Route path="*" element={<Navigate to="/staff" replace />} />
-              </Routes>
+              <ErrorBoundary>
+                <Routes>
+                  <Route path="/staff" element={<StaffDashboard />} />
+                  <Route path="*" element={<Navigate to="/staff" replace />} />
+                </Routes>
+              </ErrorBoundary>
             </main>
             <StaffMobileNav onLogout={handleLogout} />
           </div>
@@ -460,15 +602,17 @@ function App() {
         <div className="app-container">
           <CustomerNav onLogout={handleLogout} />
           <main>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/qr-system" element={<QRSystem />} />
-              <Route path="/lost-found" element={<LostFound />} />
-              {/* Customer tidak bisa akses staff */}
-              <Route path="/staff" element={<Navigate to="/" replace />} />
-              <Route path="/tables" element={<Navigate to="/" replace />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+            <ErrorBoundary>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/qr-system" element={<QRSystem />} />
+                <Route path="/lost-found" element={<LostFound />} />
+                {/* Customer tidak bisa akses staff */}
+                <Route path="/staff" element={<Navigate to="/" replace />} />
+                <Route path="/tables" element={<Navigate to="/" replace />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </ErrorBoundary>
           </main>
           <CustomerMobileNav onLogout={handleLogout} />
         </div>

@@ -4,8 +4,12 @@
 /**
  * Memainkan nada bel 2-nada "Ting-Tung" / Chime khas pengumuman resmi perpustakaan / bandara
  */
-export function playChime() {
+export function playChime(muted = false) {
   return new Promise((resolve) => {
+    if (muted) {
+      setTimeout(resolve, 850);
+      return;
+    }
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return resolve();
@@ -200,19 +204,60 @@ export async function playNewOrderAlarm(force = false) {
 
 
 
+let currentTtsAudio = null;
+
+export function stopCurrentAnnouncement() {
+  if (currentTtsAudio) {
+    try {
+      currentTtsAudio.pause();
+      currentTtsAudio.currentTime = 0;
+    } catch (e) {}
+    currentTtsAudio = null;
+  }
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch (e) {}
+  }
+}
+
 /**
  * Memainkan suara Bahasa Indonesia Asli yang jernih dan fasih
  * Mengutamakan Audio Google Indonesian TTS dari Backend, dengan fallback Web Speech API
  */
-export function speakIndonesian(text) {
+export function speakIndonesian(text, muted = false) {
   return new Promise((resolve) => {
+    let hasResolved = false;
+    const safeResolve = () => {
+      if (!hasResolved) {
+        hasResolved = true;
+        currentTtsAudio = null;
+        resolve();
+      }
+    };
+
+    // Safety timeout maksimal 12 detik agar tombol tidak pernah macet jika ada kendala jaringan
+    const safetyTimeout = setTimeout(safeResolve, 12000);
+
+    // Hentikan suara sebelumnya sebelum memutar yang baru
+    stopCurrentAnnouncement();
+
     // 1. Coba putar audio asli Bahasa Indonesia dari endpoint backend
     const audioUrl = `/api/tts?text=${encodeURIComponent(text)}`;
     const audio = new Audio(audioUrl);
+    if (muted) {
+      audio.muted = true;
+      audio.volume = 0;
+    }
+    currentTtsAudio = audio;
 
-    audio.onended = () => resolve();
+    audio.onended = () => {
+      clearTimeout(safetyTimeout);
+      safeResolve();
+    };
+
     audio.onerror = () => {
-      // 2. Fallback ke Web Speech API jika backend offline
+      // 2. Fallback ke Web Speech API jika backend offline / TTS error
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         try {
           window.speechSynthesis.cancel();
@@ -220,6 +265,9 @@ export function speakIndonesian(text) {
           utterance.lang = 'id-ID';
           utterance.rate = 0.95;
           utterance.pitch = 1.05;
+          if (muted) {
+            utterance.volume = 0;
+          }
 
           const voices = window.speechSynthesis.getVoices();
           const idVoice = voices.find(v => 
@@ -230,28 +278,52 @@ export function speakIndonesian(text) {
           );
           if (idVoice) utterance.voice = idVoice;
 
-          utterance.onend = () => resolve();
-          utterance.onerror = () => resolve();
+          utterance.onend = () => {
+            clearTimeout(safetyTimeout);
+            safeResolve();
+          };
+          utterance.onerror = () => {
+            clearTimeout(safetyTimeout);
+            safeResolve();
+          };
           window.speechSynthesis.speak(utterance);
         } catch (e) {
-          resolve();
+          clearTimeout(safetyTimeout);
+          safeResolve();
         }
       } else {
-        resolve();
+        clearTimeout(safetyTimeout);
+        safeResolve();
       }
     };
 
     audio.play().catch(() => {
       // Jika browser memblokir autoplay, coba fallback
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'id-ID';
-        utterance.rate = 0.95;
-        utterance.onend = () => resolve();
-        window.speechSynthesis.speak(utterance);
+        try {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'id-ID';
+          utterance.rate = 0.95;
+          if (muted) {
+            utterance.volume = 0;
+          }
+          utterance.onend = () => {
+            clearTimeout(safetyTimeout);
+            safeResolve();
+          };
+          utterance.onerror = () => {
+            clearTimeout(safetyTimeout);
+            safeResolve();
+          };
+          window.speechSynthesis.speak(utterance);
+        } catch (e) {
+          clearTimeout(safetyTimeout);
+          safeResolve();
+        }
       } else {
-        resolve();
+        clearTimeout(safetyTimeout);
+        safeResolve();
       }
     });
   });
@@ -260,16 +332,40 @@ export function speakIndonesian(text) {
 /**
  * Panggil pesanan: Ding-Dong bel + Pengumuman Suara Bahasa Indonesia Asli
  * Format: "Perhatian, pesanan untuk Meja 3, silakan mengambil bukunya di meja staf. Terima kasih."
+ * Mendukung opsi { muted: true } agar tombol menunggu durasi suara selesai secara alami tanpa mengeluarkan bunyi di laptop staf.
  */
-export async function announceTableOrder(tableNo, ticketCode) {
-  // 1. Bunyikan Bel Ding-Dong
-  await playChime();
+export async function announceTableOrder(tableNo, ticketCode, options = {}) {
+  const isMuted = Boolean(options.muted);
 
-  // 2. Baca Pengumuman dalam Bahasa Indonesia Resmi & Sopan
+  // 1. Matikan audio sebelumnya agar tidak ada overlap ganda
+  stopCurrentAnnouncement();
+
+  // 2. Bunyikan Bel Ding-Dong (senyap jika muted)
+  await playChime(isMuted);
+
+  // 3. Baca Pengumuman dalam Bahasa Indonesia Resmi & Sopan (senyap jika muted)
   let spokenCode = '';
   if (ticketCode) {
     spokenCode = `tiket ${ticketCode.replace('TKT-', 'T K T ')}, `;
   }
   const sentence = `Perhatian, pesanan untuk ${tableNo}, ${spokenCode}silakan mengambil bukunya di meja staf. Terima kasih.`;
-  await speakIndonesian(sentence);
+  await speakIndonesian(sentence, isMuted);
 }
+
+/**
+ * Pengumuman saat pesanan telah selesai diserahkan oleh staf
+ */
+export async function announceOrderCompleted(tableNo, ticketCode, options = {}) {
+  const isMuted = Boolean(options.muted);
+
+  stopCurrentAnnouncement();
+  await playChime(isMuted);
+
+  let spokenCode = '';
+  if (ticketCode) {
+    spokenCode = `tiket ${ticketCode.replace('TKT-', 'T K T ')}, `;
+  }
+  const sentence = `Pesanan untuk ${tableNo}, ${spokenCode}telah berhasil diserahkan oleh staf. Selamat membaca!`;
+  await speakIndonesian(sentence, isMuted);
+}
+

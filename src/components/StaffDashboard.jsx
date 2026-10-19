@@ -1,14 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { 
   Clock, Search, CheckCircle, PackageCheck, RefreshCw, Database, Ticket, Check, 
   Filter, Volume2, VolumeX, BellRing, Bell, Trash2, Package, Camera, Upload, Eye, X, 
   AlertCircle, Plus, User, CheckCircle2, Phone, MapPin, MessageCircle, BookOpen, 
-  Edit3, Image, Star, Globe, Layers, Save, BookPlus, ShieldCheck, Sparkles, Menu, ChevronDown, LayoutGrid
+  Edit3, Image, Star, Globe, Layers, Save, BookPlus, ShieldCheck, Sparkles, Menu, ChevronDown, LayoutGrid,
+  ChevronLeft, ChevronRight, Library
 } from 'lucide-react';
 import { announceTableOrder, playNewOrderAlarm } from '../utils/soundAnnouncement';
 import { useModal } from '../context/ModalContext';
+import { parseOrderBookTitles } from '../utils/orderBooks';
 import BulkBookImport from './BulkBookImport';
 
 function StaffDashboard() {
@@ -40,8 +42,17 @@ function StaffDashboard() {
   const [isDbConnected, setIsDbConnected] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const prevPendingIdsRef = useRef(null);
+  const [visitorCallEnabled, setVisitorCallEnabled] = useState(() => {
+    return localStorage.getItem('perpus_visitor_call_sound') !== 'false';
+  });
+  const [callingOrderId, setCallingOrderId] = useState(null);
+
+  const handleToggleVisitorCall = () => {
+    const nextState = !visitorCallEnabled;
+    setVisitorCallEnabled(nextState);
+    localStorage.setItem('perpus_visitor_call_sound', String(nextState));
+    window.dispatchEvent(new CustomEvent('perpus_visitor_call_toggle', { detail: nextState }));
+  };
 
   // ========================================================
   // STATE MANAJEMEN BUKU (KATALOG)
@@ -65,6 +76,47 @@ function StaffDashboard() {
   const [searchingCover, setSearchingCover] = useState(false);
   const [coverCandidates, setCoverCandidates] = useState([]);
   const bookCoverInputRef = useRef(null);
+
+  // Perhitungan Kategori, Statistik, dan Filter Buku Staf
+  const bookCategories = useMemo(() => {
+    const cats = new Set();
+    bookList.forEach(b => {
+      if (b.category && b.category.trim()) cats.add(b.category.trim());
+    });
+    return Array.from(cats).sort((a, b) => a.localeCompare(b));
+  }, [bookList]);
+
+  const totalBookStock = useMemo(() => {
+    return bookList.reduce((acc, b) => acc + (parseInt(b.stock) || 0), 0);
+  }, [bookList]);
+
+  const booksWithShelf = useMemo(() => {
+    return bookList.filter(b => b.shelf_location && b.shelf_location.trim() && !b.shelf_location.toLowerCase().includes('belum')).length;
+  }, [bookList]);
+
+  const filteredBooks = useMemo(() => {
+    return bookList.filter(book => {
+      const matchCat = bookCatFilter === 'all' || (book.category && book.category.toLowerCase() === bookCatFilter.toLowerCase());
+      const q = bookSearch.trim().toLowerCase();
+      const matchSearch = !q ||
+        (book.title && book.title.toLowerCase().includes(q)) ||
+        (book.author && book.author.toLowerCase().includes(q)) ||
+        (book.category && book.category.toLowerCase().includes(q)) ||
+        (book.shelf_location && book.shelf_location.toLowerCase().includes(q)) ||
+        (book.classification && String(book.classification).toLowerCase().includes(q));
+      return matchCat && matchSearch;
+    });
+  }, [bookList, bookCatFilter, bookSearch]);
+
+  const totalBookPages = Math.max(1, Math.ceil(filteredBooks.length / BOOKS_PER_PAGE));
+  const paginatedBooks = useMemo(() => {
+    return filteredBooks.slice((bookPage - 1) * BOOKS_PER_PAGE, bookPage * BOOKS_PER_PAGE);
+  }, [filteredBooks, bookPage]);
+
+  // Reset halaman buku saat pencarian atau filter kategori berubah
+  useEffect(() => {
+    setBookPage(1);
+  }, [bookSearch, bookCatFilter]);
 
   // ========================================================
   // STATE BARANG TERTINGGAL (LOST & FOUND)
@@ -92,7 +144,7 @@ function StaffDashboard() {
 
   // Kunci scroll body saat modal staf terbuka agar layar tidak bergeser
   useEffect(() => {
-    if (showCreateModal || handoverModalItem || viewPhotoItem) {
+    if (showCreateModal || handoverModalItem || viewPhotoItem || showBookModal) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -100,7 +152,7 @@ function StaffDashboard() {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [showCreateModal, handoverModalItem, viewPhotoItem]);
+  }, [showCreateModal, handoverModalItem, viewPhotoItem, showBookModal]);
 
   // --------------------------------------------------------
   // FETCH ORDERS (Pesanan Buku)
@@ -124,7 +176,9 @@ function StaffDashboard() {
           book: item.book_title || item.book,
           table: item.table_no || item.table,
           status: item.status,
-          time: timeStr
+          time: timeStr,
+          visitor_online: Boolean(item.visitor_online),
+          visitor_last_seen_ms: item.visitor_last_seen_ms || null
         };
       });
 
@@ -194,25 +248,6 @@ function StaffDashboard() {
     return () => clearInterval(interval);
   }, [activeModule]);
 
-  // Hitung apakah ada pesanan yang belum diproses langkah satu (status masih 'pending')
-  const hasPendingOrders = orders.some((o) => o.status === 'pending');
-
-  // Alarm berdurasi 2 detik yang berbunyi dan berulang setiap 15 detik selama belum diproses langkah satu
-  useEffect(() => {
-    if (!hasPendingOrders || !soundEnabled) return;
-
-    // Bunyikan langsung alarm 2 detik saat pesanan pending terdeteksi
-    playNewOrderAlarm(true);
-
-    // Ulangi bunyi 2 detik setiap 15 detik sampai staf memproses langkah satu ("1. Mulai Mencari Buku di Rak")
-    const alarmInterval = setInterval(() => {
-      if (soundEnabled) {
-        playNewOrderAlarm(true);
-      }
-    }, 15000);
-
-    return () => clearInterval(alarmInterval);
-  }, [hasPendingOrders, soundEnabled]);
 
   // --------------------------------------------------------
   // HANDLERS MANAJEMEN BUKU
@@ -385,32 +420,53 @@ function StaffDashboard() {
       prev.map((order) => (order.id === id ? { ...order, status: newStatus } : order))
     );
 
+    // Kirim sinyal seketika agar alarm pesanan di header StaffNav langsung berhenti tanpa jeda
+    window.dispatchEvent(new CustomEvent('perpus_order_status_changed', { detail: { id, newStatus } }));
+
     try {
       await fetch(`/api/orders/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
+      window.dispatchEvent(new CustomEvent('perpus_order_status_changed', { detail: { id, newStatus } }));
     } catch (err) {
       console.error('Gagal memperbarui status ke database:', err);
     }
   };
 
-  const handleReadyAndAnnounce = (order) => {
+  const handleReadyAndAnnounce = async (order) => {
     updateStatus(order.id, 'ready');
-    if (soundEnabled) {
-      announceTableOrder(order.table, order.ticket_code);
+    setCallingOrderId(order.id);
+    try {
+      await announceTableOrder(order.table, order.ticket_code, { muted: !visitorCallEnabled });
+    } catch (err) {
+      console.warn('Gagal memutar pengumuman siap:', err);
+    } finally {
+      setCallingOrderId(null);
     }
   };
 
   const handleRecallOrder = async (order) => {
+    if (callingOrderId) return;
+    setCallingOrderId(order.id);
+
+    // Kirim sinyal panggil ulang ke backend agar HP pengunjung / TV Lobby berbunyi
     try {
       await fetch(`/api/orders/${order.id}/call`, { method: 'POST' });
     } catch (err) {
       console.warn('Gagal kirim panggil ulang ke backend:', err);
     }
-    if (soundEnabled) {
-      announceTableOrder(order.table, order.ticket_code);
+
+    try {
+      // Jalankan pemanggilan suara sampai selesai secara aktual
+      // Jika visitorCallEnabled === false (staf mute), audio tetap diputar dalam mode senyap (muted: true)
+      // sehingga tombol menunggu sampai suara benar-benar selesai baru aktif kembali!
+      await announceTableOrder(order.table, order.ticket_code, { muted: !visitorCallEnabled });
+    } catch (err) {
+      console.warn('Gagal memutar suara panggil ulang:', err);
+    } finally {
+      setCallingOrderId(null);
     }
   };
 
@@ -986,6 +1042,12 @@ function StaffDashboard() {
                   )}
                 </>
               )}
+              {activeModule === 'books' && (
+                <>
+                  <BookOpen size={16} color="#38bdf8" />
+                  <span>Katalog Buku ({bookList.length})</span>
+                </>
+              )}
               {activeModule === 'import_books' && (
                 <>
                   <BookPlus size={16} color="#34d399" />
@@ -1046,6 +1108,27 @@ function StaffDashboard() {
                     <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#ef4444' }} />
                   )}
                 </span>
+              </button>
+
+              <button
+                type="button"
+                className={`mobile-filter-option ${activeModule === 'books' ? 'active books' : ''}`}
+                onClick={() => {
+                  setActiveModule('books');
+                  fetchBooks();
+                  setMobileModuleMenuOpen(false);
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(14, 165, 233, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <BookOpen size={16} color="#38bdf8" />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span className="mobile-filter-text" style={{ fontWeight: 700 }}>Katalog Buku</span>
+                    <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Kelola koleksi perpustakaan</span>
+                  </div>
+                </div>
+                <span className="mobile-filter-badge">{bookList.length}</span>
               </button>
 
               <button
@@ -1197,32 +1280,24 @@ function StaffDashboard() {
               <div className="orders-utility-group">
                 <button 
                   type="button"
-                  className={`orders-utility-btn ${soundEnabled ? 'active-audio' : 'muted-audio'}`} 
-                  onClick={() => setSoundEnabled(!soundEnabled)}
-                  title={soundEnabled ? "Speaker Aktif (klik untuk senyapkan pengumuman)" : "Speaker Senyap (klik untuk nyalakan)"}
+                  className={`orders-utility-btn ${visitorCallEnabled ? 'active-audio' : 'muted-audio'}`} 
+                  onClick={handleToggleVisitorCall}
+                  title={visitorCallEnabled 
+                    ? "Speaker Panggilan Meja Aktif (klik untuk senyapkan suara panggilan meja pengunjung. Tidak mematikan alarm notifikasi)" 
+                    : "Speaker Panggilan Meja Senyap (klik untuk nyalakan suara panggilan meja pengunjung. Alarm notifikasi tetap berbunyi)"}
                 >
-                  {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
-                  <span className="utility-label">{soundEnabled ? 'Suara ON' : 'Mute'}</span>
+                  {visitorCallEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
+                  <span className="utility-label">{visitorCallEnabled ? 'Panggilan ON' : 'Mute Panggilan'}</span>
                 </button>
 
                 <button 
                   type="button"
                   className="orders-utility-btn" 
-                  onClick={() => announceTableOrder('Meja 3', 'TKT-1003')}
-                  title="Klik untuk tes suara pengumuman meja"
+                  onClick={() => announceTableOrder('Meja 3', 'TKT-1003', { muted: !visitorCallEnabled })}
+                  title="Klik untuk tes suara panggilan meja pengunjung"
                 >
                   <BellRing size={15} />
-                  <span className="utility-label">Tes Suara</span>
-                </button>
-
-                <button 
-                  type="button"
-                  className="orders-utility-btn" 
-                  onClick={() => playNewOrderAlarm(true)}
-                  title="Klik untuk tes bunyi alarm notifikasi pesanan baru"
-                >
-                  <Bell size={15} color="#fbbf24" />
-                  <span className="utility-label">Tes Alarm</span>
+                  <span className="utility-label">Tes Panggilan</span>
                 </button>
 
                 <button 
@@ -1271,11 +1346,69 @@ function StaffDashboard() {
                 >
                   <div className="order-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
-                      <div className="ticket-code-tag">
-                        <Ticket size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
-                        {order.ticket_code}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <div className="ticket-code-tag">
+                          <Ticket size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                          {order.ticket_code}
+                        </div>
+                        <span className="order-table">{order.table}</span>
                       </div>
-                      <span className="order-table" style={{ marginLeft: '6px' }}>{order.table}</span>
+
+                      {/* Indikator Status Pengunjung di Website */}
+                      <div style={{ marginTop: '6px' }}>
+                        {order.visitor_online ? (
+                          <span 
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              fontSize: '0.72rem',
+                              fontWeight: '700',
+                              color: '#10b981',
+                              background: 'rgba(16, 185, 129, 0.12)',
+                              border: '1px solid rgba(16, 185, 129, 0.35)',
+                              padding: '2px 8px',
+                              borderRadius: '20px'
+                            }}
+                            title="Pengunjung sedang aktif membuka website di HP / meja"
+                          >
+                            <span style={{
+                              width: '7px',
+                              height: '7px',
+                              borderRadius: '50%',
+                              backgroundColor: '#10b981',
+                              boxShadow: '0 0 6px #10b981',
+                              display: 'inline-block'
+                            }} />
+                            🟢 Aktif di Web
+                          </span>
+                        ) : (
+                          <span 
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              fontSize: '0.72rem',
+                              fontWeight: '700',
+                              color: '#ef4444',
+                              background: 'rgba(239, 68, 68, 0.12)',
+                              border: '1px solid rgba(239, 68, 68, 0.35)',
+                              padding: '2px 8px',
+                              borderRadius: '20px'
+                            }}
+                            title="Pengunjung telah keluar atau menutup tab browser"
+                          >
+                            <span style={{
+                              width: '7px',
+                              height: '7px',
+                              borderRadius: '50%',
+                              backgroundColor: '#ef4444',
+                              display: 'inline-block'
+                            }} />
+                            🔴 Web Ditutup
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1304,8 +1437,8 @@ function StaffDashboard() {
                       Buku yang Dipesan:
                     </div>
                     <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.8rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                      {order.book.split(',').map((title, idx) => (
-                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: idx !== order.book.split(',').length - 1 ? '6px' : '0' }}>
+                      {parseOrderBookTitles(order.book, bookList).map((title, idx, allTitles) => (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: idx !== allTitles.length - 1 ? '6px' : '0' }}>
                           <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(99,102,241,0.25)', color: '#a5b4fc', fontSize: '0.7rem', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             {idx + 1}
                           </span>
@@ -1344,14 +1477,51 @@ function StaffDashboard() {
 
                     {order.status === 'ready' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
+                        {!order.visitor_online && (
+                          <div style={{
+                            background: 'rgba(239, 68, 68, 0.12)',
+                            border: '1px solid rgba(239, 68, 68, 0.35)',
+                            borderRadius: '8px',
+                            padding: '7px 10px',
+                            fontSize: '0.74rem',
+                            color: '#fca5a5',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '6px',
+                            lineHeight: 1.4
+                          }}>
+                            <AlertCircle size={15} style={{ color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
+                            <span>
+                              <strong>Pengunjung sudah menutup web:</strong> Panggilan di layar HP tidak muncul. Silakan panggil nomor <strong>{order.table}</strong> melalui <strong>speaker ruangan</strong> atau antarkan langsung bukunya ke mejanya.
+                            </span>
+                          </div>
+                        )}
                         <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
                           <button 
                             className="btn btn-secondary" 
-                            style={{ flex: 1, padding: '0.5rem', fontSize: '0.8rem' }}
+                            style={{ 
+                              flex: 1, 
+                              padding: '0.5rem', 
+                              fontSize: '0.8rem',
+                              opacity: callingOrderId ? 0.6 : 1,
+                              cursor: callingOrderId ? 'not-allowed' : 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px'
+                            }}
+                            disabled={Boolean(callingOrderId)}
                             onClick={() => handleRecallOrder(order)}
-                            title="Bunyikan ulang pengumuman suara ke HP pengunjung"
+                            title={
+                              callingOrderId 
+                                ? 'Harap tunggu hingga suara panggilan selesai...' 
+                                : visitorCallEnabled 
+                                  ? 'Bunyikan ulang pengumuman suara ke HP pengunjung' 
+                                  : 'Panggil ulang ke HP pengunjung (speaker staf dalam mode mute)'
+                            }
                           >
-                            <Volume2 size={14} /> Panggil Ulang
+                            <Volume2 size={14} className={callingOrderId === order.id ? 'animate-pulse' : ''} />
+                            {callingOrderId === order.id ? 'Memanggil...' : 'Panggil Ulang'}
                           </button>
 
 
@@ -1373,9 +1543,31 @@ function StaffDashboard() {
                     )}
 
                     {order.status === 'completed' && (
-                      <p style={{ color: 'var(--text-muted)', textAlign: 'center', width: '100%', fontSize: '0.85rem' }}>
-                        ✅ Buku telah diserahkan kepada pemegang tiket <strong>{order.ticket_code}</strong>.
-                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', width: '100%' }}>
+                        <p style={{ color: 'var(--text-muted)', textAlign: 'center', width: '100%', fontSize: '0.85rem', margin: 0 }}>
+                          ✅ Buku telah diserahkan kepada pemegang tiket <strong>{order.ticket_code}</strong>.
+                        </p>
+                        <button 
+                          className="btn btn-secondary" 
+                          style={{ 
+                            width: '100%', 
+                            padding: '0.55rem', 
+                            fontSize: '0.82rem', 
+                            color: '#f59e0b', 
+                            borderColor: 'rgba(245, 158, 11, 0.45)', 
+                            background: 'rgba(245, 158, 11, 0.08)',
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            gap: '6px',
+                            marginTop: '4px'
+                          }}
+                          onClick={() => updateStatus(order.id, 'ready')}
+                          title="Buka kembali tiket ini ke status Siap Diambil agar bisa dipanggil ulang atau diserahkan lagi"
+                        >
+                          <RefreshCw size={14} /> Buka Kembali (Bisa Dipanggil Ulang)
+                        </button>
+                      </div>
                     )}
 
                     {order.status === 'cancelled' && (
@@ -2247,6 +2439,386 @@ function StaffDashboard() {
       )}
 
       {/* ======================================================== */}
+      {/* MODUL: KATALOG BUKU PERPUSTAKAAN (STAFF INVENTORY)      */}
+      {/* ======================================================== */}
+      {activeModule === 'books' && (
+        <div style={{ animation: 'staffFadeIn 0.3s ease' }}>
+          {/* Header Deck Katalog Buku */}
+          <div className="orders-control-deck" style={{ marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '12px',
+                background: 'rgba(14, 165, 233, 0.2)',
+                border: '1px solid rgba(56, 189, 248, 0.35)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#38bdf8',
+                boxShadow: '0 4px 14px rgba(14, 165, 233, 0.25)'
+              }}>
+                <BookOpen size={22} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: '1.18rem', fontWeight: 800, color: '#ffffff', margin: 0, letterSpacing: '-0.01em' }}>
+                  Katalog & Inventaris Buku
+                </h2>
+                <p style={{ fontSize: '0.78rem', color: '#94a3b8', margin: 0, marginTop: '2px' }}>
+                  Kelola database koleksi, nomor rak fisik, ketersediaan stok, dan foto sampul
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={fetchBooks}
+                title="Segarkan data buku"
+                disabled={loadingBooks}
+                style={{ padding: '0.55rem 0.85rem', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                <RefreshCw size={14} className={loadingBooks ? 'animate-spin' : ''} />
+                <span>Segarkan</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleOpenAddBook}
+                style={{
+                  padding: '0.55rem 1rem',
+                  fontSize: '0.84rem',
+                  background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+                  borderColor: '#38bdf8',
+                  boxShadow: '0 4px 14px rgba(2, 132, 199, 0.4)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: 700
+                }}
+              >
+                <Plus size={16} />
+                <span>Tambah Buku Baru</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Stats Grid */}
+          <div className="books-stats-grid">
+            <div className="books-stat-card">
+              <div className="books-stat-icon" style={{ background: 'rgba(14, 165, 233, 0.15)', color: '#38bdf8' }}>
+                <BookOpen size={22} />
+              </div>
+              <div>
+                <div className="books-stat-val">{bookList.length}</div>
+                <div className="books-stat-lbl">Total Judul Koleksi</div>
+              </div>
+            </div>
+
+            <div className="books-stat-card">
+              <div className="books-stat-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399' }}>
+                <Library size={22} />
+              </div>
+              <div>
+                <div className="books-stat-val">{totalBookStock}</div>
+                <div className="books-stat-lbl">Total Stok Eksemplar</div>
+              </div>
+            </div>
+
+            <div className="books-stat-card">
+              <div className="books-stat-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8' }}>
+                <Layers size={22} />
+              </div>
+              <div>
+                <div className="books-stat-val">{bookCategories.length}</div>
+                <div className="books-stat-lbl">Kategori Bidang Ilmu</div>
+              </div>
+            </div>
+
+            <div className="books-stat-card">
+              <div className="books-stat-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' }}>
+                <MapPin size={22} />
+              </div>
+              <div>
+                <div className="books-stat-val">{booksWithShelf}</div>
+                <div className="books-stat-lbl">Lokasi Rak Terdata</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Toolbar: Search & Category Filter */}
+          <div className="books-toolbar">
+            <div className="books-search-box">
+              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+              <input
+                type="text"
+                className="books-search-input"
+                placeholder="Cari judul, pengarang, rak, atau DDC..."
+                value={bookSearch}
+                onChange={(e) => setBookSearch(e.target.value)}
+              />
+              {bookSearch && (
+                <button
+                  type="button"
+                  onClick={() => setBookSearch('')}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <Filter size={15} color="#94a3b8" />
+                <select
+                  className="books-cat-select"
+                  value={bookCatFilter}
+                  onChange={(e) => setBookCatFilter(e.target.value)}
+                >
+                  <option value="all">Semua Kategori ({bookList.length})</option>
+                  {bookCategories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              {(bookSearch || bookCatFilter !== 'all') && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setBookSearch('');
+                    setBookCatFilter('all');
+                  }}
+                  style={{ padding: '0.55rem 0.85rem', fontSize: '0.78rem' }}
+                >
+                  Reset Filter
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Main Book Table */}
+          <div className="books-table-container">
+            <div className="books-table-responsive">
+              <table className="books-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '60px', textAlign: 'center' }}>Sampul</th>
+                    <th>Judul & Penulis</th>
+                    <th style={{ width: '150px' }}>Kategori & DDC</th>
+                    <th style={{ width: '170px' }}>Lokasi Rak Fisik</th>
+                    <th style={{ width: '130px', textAlign: 'center' }}>Stok Fisik</th>
+                    <th style={{ width: '130px', textAlign: 'right' }}>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingBooks && bookList.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '3.5rem 1rem' }}>
+                        <RefreshCw size={28} className="animate-spin" style={{ color: '#38bdf8', margin: '0 auto 10px' }} />
+                        <div style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Memuat data katalog buku perpustakaan...</div>
+                      </td>
+                    </tr>
+                  ) : filteredBooks.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '3.5rem 1rem' }}>
+                        <div style={{
+                          width: '56px',
+                          height: '56px',
+                          borderRadius: '16px',
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          margin: '0 auto 12px',
+                          color: '#64748b'
+                        }}>
+                          <BookOpen size={28} />
+                        </div>
+                        <div style={{ fontWeight: 700, color: '#ffffff', fontSize: '1rem', marginBottom: '4px' }}>
+                          Buku Tidak Ditemukan
+                        </div>
+                        <div style={{ color: '#94a3b8', fontSize: '0.85rem', maxWidth: '380px', margin: '0 auto 1rem' }}>
+                          Tidak ada koleksi buku yang cocok dengan kata kunci &quot;{bookSearch}&quot; atau filter yang dipilih.
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => { setBookSearch(''); setBookCatFilter('all'); }}
+                          style={{ padding: '0.5rem 1rem', fontSize: '0.82rem' }}
+                        >
+                          Tampilkan Semua Buku
+                        </button>
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedBooks.map((book) => {
+                      const stockNum = parseInt(book.stock) || 0;
+                      return (
+                        <tr key={book.id}>
+                          {/* Sampul Thumbnail */}
+                          <td style={{ textAlign: 'center' }}>
+                            {book.cover_url ? (
+                              <img
+                                src={book.cover_url}
+                                alt={book.title}
+                                className="books-thumb"
+                                loading="lazy"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  if (e.currentTarget.nextSibling) {
+                                    e.currentTarget.nextSibling.style.display = 'flex';
+                                  }
+                                }}
+                              />
+                            ) : null}
+                            <div
+                              className="books-thumb"
+                              style={{ display: book.cover_url ? 'none' : 'flex' }}
+                              title="Belum ada sampul"
+                            >
+                              <BookOpen size={18} />
+                            </div>
+                          </td>
+
+                          {/* Judul & Penulis */}
+                          <td>
+                            <div style={{ fontWeight: 700, color: '#ffffff', fontSize: '0.94rem', lineHeight: '1.35', marginBottom: '3px' }}>
+                              {book.title}
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              <span>✍️ {book.author || 'Penulis Tidak Diketahui'}</span>
+                              {book.rating > 0 && (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#facc15', fontWeight: 600 }}>
+                                  <Star size={12} fill="#facc15" /> {Number(book.rating).toFixed(1)}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Kategori & DDC */}
+                          <td>
+                            <div style={{
+                              display: 'inline-block',
+                              fontSize: '0.76rem',
+                              fontWeight: 600,
+                              padding: '2px 8px',
+                              borderRadius: '6px',
+                              background: 'rgba(99, 102, 241, 0.15)',
+                              color: '#a5b4fc',
+                              marginBottom: '3px'
+                            }}>
+                              {book.category || 'Umum'}
+                            </div>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                              DDC: {book.classification || '000'}
+                            </div>
+                          </td>
+
+                          {/* Lokasi Rak Fisik */}
+                          <td>
+                            <span className="books-shelf-pill">
+                              <MapPin size={12} />
+                              <span>{book.shelf_location || 'Belum Diatur'}</span>
+                            </span>
+                          </td>
+
+                          {/* Stok Fisik */}
+                          <td style={{ textAlign: 'center' }}>
+                            <span className={`books-stock-pill ${stockNum > 0 ? 'in-stock' : 'out-stock'}`}>
+                              {stockNum > 0 ? `Tersedia (${stockNum})` : 'Habis (0)'}
+                            </span>
+                          </td>
+
+                          {/* Aksi: Edit & Hapus */}
+                          <td style={{ textAlign: 'right' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                              <button
+                                type="button"
+                                className="books-btn-edit"
+                                onClick={() => handleOpenEditBook(book)}
+                                title="Edit data buku & lokasi rak"
+                              >
+                                <Edit3 size={13} />
+                                <span>Edit</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                className="books-btn-delete"
+                                onClick={() => handleDeleteBook(book)}
+                                title="Hapus buku dari katalog"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Bar */}
+            {filteredBooks.length > 0 && (
+              <div className="books-pagination-bar">
+                <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                  Menampilkan <strong>{Math.min((bookPage - 1) * BOOKS_PER_PAGE + 1, filteredBooks.length)}</strong> - <strong>{Math.min(bookPage * BOOKS_PER_PAGE, filteredBooks.length)}</strong> dari <strong>{filteredBooks.length}</strong> buku
+                  {filteredBooks.length !== bookList.length && (
+                    <span style={{ marginLeft: '4px', color: '#64748b' }}>
+                      (difilter dari {bookList.length} total buku)
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="books-page-btn"
+                    disabled={bookPage <= 1}
+                    onClick={() => setBookPage(prev => Math.max(1, prev - 1))}
+                  >
+                    <ChevronLeft size={14} />
+                    <span>Sebelumnya</span>
+                  </button>
+
+                  <span style={{ fontSize: '0.8rem', color: '#cbd5e1', padding: '0 4px', fontWeight: 600 }}>
+                    {bookPage} / {totalBookPages}
+                  </span>
+
+                  <button
+                    type="button"
+                    className="books-page-btn"
+                    disabled={bookPage >= totalBookPages}
+                    onClick={() => setBookPage(prev => Math.min(totalBookPages, prev + 1))}
+                  >
+                    <span>Selanjutnya</span>
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
       {/* MODUL: TAMBAH BUKU DARI PDF (DAFTAR & SAMPUL CERDAS) */}
       {/* ======================================================== */}
       {activeModule === 'import_books' && (
@@ -2752,6 +3324,326 @@ function StaffDashboard() {
             >
               Tutup
             </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: TAMBAH / EDIT BUKU KATALOG (PORTAL)               */}
+      {/* ======================================================== */}
+      {showBookModal && typeof document !== 'undefined' && createPortal(
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.85)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 999999,
+          padding: '1rem',
+          overflowY: 'auto'
+        }}>
+          <div style={{
+            background: 'var(--surface-color)',
+            border: '1.5px solid rgba(56, 189, 248, 0.45)',
+            borderRadius: '16px',
+            padding: '1.8rem',
+            maxWidth: '620px',
+            width: '94%',
+            maxHeight: '92vh',
+            overflowY: 'auto',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.9)'
+          }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.2rem' }}>
+              <div>
+                <h2 style={{ fontSize: '1.25rem', color: '#ffffff', margin: 0, display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800 }}>
+                  <BookOpen size={22} color="#38bdf8" />
+                  {editingBook ? 'Edit Data Buku' : 'Tambah Buku Baru'}
+                </h2>
+                <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: '4px 0 0' }}>
+                  {editingBook ? `Perbarui informasi koleksi untuk "${editingBook.title}"` : 'Masukkan informasi buku baru ke dalam database perpustakaan'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setShowBookModal(false); resetBookForm(); }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem', padding: '4px' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSubmitBook}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {/* Judul Buku */}
+                <div className="form-group">
+                  <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, marginBottom: '6px', color: '#cbd5e1' }}>
+                    Judul Buku <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Contoh: Laskar Pelangi"
+                    required
+                    value={bookForm.title}
+                    onChange={(e) => setBookForm({ ...bookForm, title: e.target.value })}
+                  />
+                </div>
+
+                {/* Pengarang / Penulis */}
+                <div className="form-group">
+                  <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, marginBottom: '6px', color: '#cbd5e1' }}>
+                    Pengarang / Penulis <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Contoh: Andrea Hirata"
+                    required
+                    value={bookForm.author}
+                    onChange={(e) => setBookForm({ ...bookForm, author: e.target.value })}
+                  />
+                </div>
+
+                {/* Grid 2 Kolom: Kategori & Nomor Klasifikasi */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, marginBottom: '6px', color: '#cbd5e1' }}>
+                      Kategori
+                    </label>
+                    <input
+                      type="text"
+                      list="categories-list"
+                      className="form-control"
+                      placeholder="Contoh: Fiksi, Sains, Sejarah..."
+                      value={bookForm.category}
+                      onChange={(e) => setBookForm({ ...bookForm, category: e.target.value })}
+                    />
+                    <datalist id="categories-list">
+                      {bookCategories.map(c => (
+                        <option key={c} value={c} />
+                      ))}
+                    </datalist>
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, marginBottom: '6px', color: '#cbd5e1' }}>
+                      Nomor Klasifikasi (DDC)
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Contoh: 813 atau 005.1"
+                      value={bookForm.classification}
+                      onChange={(e) => setBookForm({ ...bookForm, classification: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {/* Grid 2 Kolom: Lokasi Rak Fisik & Stok */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, marginBottom: '6px', color: '#cbd5e1' }}>
+                      Lokasi Rak Fisik <span style={{ color: '#38bdf8', fontSize: '0.75rem' }}>(Penting untuk Pengunjung)</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Contoh: Rak A-02, Baris 3"
+                      value={bookForm.shelf_location}
+                      onChange={(e) => setBookForm({ ...bookForm, shelf_location: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, marginBottom: '6px', color: '#cbd5e1' }}>
+                      Jumlah Stok Eksemplar
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      className="form-control"
+                      placeholder="1"
+                      value={bookForm.stock}
+                      onChange={(e) => setBookForm({ ...bookForm, stock: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {/* Box Pengaturan Sampul Buku */}
+                <div style={{
+                  background: 'rgba(0, 0, 0, 0.35)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '12px',
+                  padding: '1rem'
+                }}>
+                  <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, marginBottom: '8px', color: '#cbd5e1' }}>
+                    Foto Sampul Buku
+                  </label>
+
+                  <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    {/* Thumbnail Preview */}
+                    <div style={{
+                      width: '64px',
+                      height: '90px',
+                      borderRadius: '8px',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      overflow: 'hidden',
+                      flexShrink: 0
+                    }}>
+                      {coverPreview ? (
+                        <img
+                          src={coverPreview}
+                          alt="Preview Sampul"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <Image size={24} color="#64748b" />
+                      )}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: '220px' }}>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                        {/* Tombol Cari Otomatis via OpenLibrary */}
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={handleSearchCover}
+                          disabled={searchingCover}
+                          style={{ fontSize: '0.78rem', padding: '0.45rem 0.75rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                        >
+                          <Sparkles size={13} color="#38bdf8" />
+                          <span>{searchingCover ? 'Mencari...' : 'Cari Sampul Online'}</span>
+                        </button>
+
+                        {/* Tombol Upload File Lokal */}
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => bookCoverInputRef.current?.click()}
+                          style={{ fontSize: '0.78rem', padding: '0.45rem 0.75rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                        >
+                          <Upload size={13} />
+                          <span>Unggah Foto</span>
+                        </button>
+
+                        <input
+                          type="file"
+                          ref={bookCoverInputRef}
+                          style={{ display: 'none' }}
+                          accept="image/*"
+                          onChange={handleBookCoverFile}
+                        />
+
+                        {coverPreview && (
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => {
+                              setCoverPreview(null);
+                              setBookForm(prev => ({ ...prev, cover_url: '', cover_image: null }));
+                            }}
+                            style={{ fontSize: '0.78rem', padding: '0.45rem 0.65rem', color: '#f87171' }}
+                            title="Hapus sampul"
+                          >
+                            Hapus
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Kandidat Sampul dari OpenLibrary */}
+                      {coverCandidates.length > 0 && (
+                        <div style={{ marginTop: '8px' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#38bdf8', marginBottom: '6px', fontWeight: 600 }}>
+                            Pilih salah satu sampul yang cocok:
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '6px' }}>
+                            {coverCandidates.map((c, i) => (
+                              <div
+                                key={i}
+                                className="books-cover-candidate-card"
+                                onClick={() => handleSelectCoverCandidate(c)}
+                                title={c.title}
+                              >
+                                <img
+                                  src={c.cover_url}
+                                  alt={c.title}
+                                  style={{ width: '100%', height: '70px', objectFit: 'cover', borderRadius: '4px' }}
+                                />
+                                <div style={{ fontSize: '0.65rem', color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
+                                  Pilih #{i + 1}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Input manual URL sampul */}
+                      <input
+                        type="url"
+                        className="form-control"
+                        placeholder="Atau tempel URL gambar sampul (https://...)"
+                        style={{ fontSize: '0.8rem', marginTop: '6px' }}
+                        value={bookForm.cover_url}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setBookForm({ ...bookForm, cover_url: val, cover_image: null });
+                          setCoverPreview(val || null);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '0.85rem', justifyContent: 'flex-end', marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => { setShowBookModal(false); resetBookForm(); }}
+                  disabled={isSubmittingBook}
+                >
+                  Batal
+                </button>
+
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={isSubmittingBook}
+                  style={{
+                    background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+                    borderColor: '#38bdf8',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontWeight: 700
+                  }}
+                >
+                  {isSubmittingBook ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" />
+                      <span>Menyimpan...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={16} />
+                      <span>{editingBook ? 'Simpan Perubahan' : 'Tambahkan ke Katalog'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>,
         document.body

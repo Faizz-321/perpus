@@ -78,4 +78,7 @@ npm run dev
 
 ## 🏛️ Identitas & Branding
 - **Instansi**: Perpustakaan Umum Kota Parepare
-- **Logo**: Lambang Resmi Kota Parepare (`Lambang.png`)
+- **Logo Resmi**:
+  - Logo Dinas Perpustakaan Kota Parepare (`logo-perpus.png` / `logo perpus.jpg`)
+  - Lambang Kota Parepare (`Lambang.png`)
+  - Logo Ilmu Komputer Institut Teknologi BJ Habibie (`logo-ilkom.png` / `logo ilkom.jpg`)

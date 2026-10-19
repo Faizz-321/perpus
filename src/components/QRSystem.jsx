@@ -1,8 +1,45 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Loader2, Ticket, CheckCircle2, Clock, Search, BookOpen, AlertCircle, XCircle, Plus, Check, ChevronLeft, ChevronRight, ChevronDown, Bookmark, MapPin, Volume2, Star, Flame, Sparkles, MessageSquare, Bell, Lock, Eye, ArrowRight } from 'lucide-react';
+import { Send, Loader2, Ticket, CheckCircle2, Clock, Search, BookOpen, AlertCircle, XCircle, Plus, Check, ChevronLeft, ChevronRight, ChevronDown, Bookmark, MapPin, Volume2, Star, Flame, Sparkles, MessageSquare, Bell, Lock, Eye, ArrowRight, History, Trash2 } from 'lucide-react';
 import { announceTableOrder } from '../utils/soundAnnouncement';
 import { useModal } from '../context/ModalContext';
+import { parseOrderBookTitles, serializeOrderBookTitles } from '../utils/orderBooks';
+
+// Kunci penyimpanan localStorage
+const ORDER_HISTORY_KEY = 'bibliotech_order_history';
+const ACTIVE_ORDER_KEY = 'bibliotech_active_order';
+const LAST_COMPLETED_KEY = 'bibliotech_last_completed_order';
+const TABLE_NO_KEY = 'bibliotech_table_no';
+
+// Ambil riwayat tiket yang tersimpan di HP pengunjung
+function getStoredOrderHistory() {
+  try {
+    const raw = localStorage.getItem(ORDER_HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// Simpan tiket ke dalam riwayat permanen di HP
+function saveOrderToHistory(order) {
+  if (!order || !order.ticket_code) return;
+  try {
+    const existing = getStoredOrderHistory();
+    const filtered = existing.filter(o => o.id !== order.id && o.ticket_code !== order.ticket_code);
+    const updated = [
+      {
+        ...order,
+        status: 'completed',
+        completed_at: order.completed_at || new Date().toISOString()
+      },
+      ...filtered
+    ].slice(0, 30);
+    localStorage.setItem(ORDER_HISTORY_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.warn('Gagal menyimpan riwayat pesanan:', e);
+  }
+}
 
 // Palet warna sampul buku realistis yang elegan
 const COVER_THEMES = [
@@ -24,7 +61,9 @@ function getThemeForBook(id, title) {
 function QRSystem() {
   const { showAlert, showConfirm } = useModal();
   const [step, setStep] = useState(1);
-  const [tableNo, setTableNo] = useState('');
+  const [tableNo, setTableNo] = useState(() => {
+    return localStorage.getItem(TABLE_NO_KEY) || '';
+  });
   
   // Data buku dan filter
   const [books, setBooks] = useState([]);
@@ -38,6 +77,10 @@ function QRSystem() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeOrder, setActiveOrder] = useState(null);
+  const [orderHistory, setOrderHistory] = useState(getStoredOrderHistory);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [isConfirmingReceived, setIsConfirmingReceived] = useState(false);
+  const prevStatusRef = useRef(null);
 
   // Status apakah pengunjung sedang memiliki pesanan aktif yang belum selesai/dibatalkan
   const hasActiveOrder = Boolean(
@@ -51,6 +94,7 @@ function QRSystem() {
   useEffect(() => {
     if (activeOrder?.table_no && !tableNo) {
       setTableNo(activeOrder.table_no);
+      localStorage.setItem(TABLE_NO_KEY, activeOrder.table_no);
     }
   }, [activeOrder?.table_no, tableNo]);
 
@@ -97,20 +141,33 @@ function QRSystem() {
 
   const tables = Array.from({ length: 24 }, (_, i) => `Meja ${i + 1}`);
 
-  // Cek apakah ada tiket aktif yang tersimpan di browser
+  // Cek apakah ada nomor meja & tiket yang tersimpan di browser HP saat halaman dibuka
   useEffect(() => {
-    const saved = localStorage.getItem('bibliotech_active_order');
+    // 1. Pulihkan nomor meja pengunjung jika ada
+    const savedTable = localStorage.getItem(TABLE_NO_KEY);
+    if (savedTable) {
+      setTableNo(savedTable);
+    }
+
+    // 2. Pulihkan pesanan aktif atau pesanan selesai terakhir
+    const saved = localStorage.getItem(ACTIVE_ORDER_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.status !== 'completed' && parsed.status !== 'cancelled') {
+        if (parsed && parsed.status !== 'cancelled') {
           setActiveOrder(parsed);
+          if (parsed.table_no) {
+            setTableNo(parsed.table_no);
+          }
+          // Tetap buka halaman tiket (Step 2) agar status selesai & ulasan tidak hilang
           setStep(2);
         }
       } catch (e) {
-        localStorage.removeItem('bibliotech_active_order');
+        console.warn('Gagal membaca tiket dari localStorage:', e);
       }
     }
+    // Sinkronkan riwayat tiket lokal
+    setOrderHistory(getStoredOrderHistory());
   }, []);
 
   // Otomatis scroll ke atas ketika ganti step (agar tiket langsung terlihat di HP tanpa perlu reload)
@@ -118,13 +175,21 @@ function QRSystem() {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [step]);
 
-  // Simpan / update status tiket ke localStorage
+  // Simpan / update status tiket ke localStorage secara aman tanpa menghapus pesanan selesai
   useEffect(() => {
     if (activeOrder) {
-      if (activeOrder.status === 'completed' || activeOrder.status === 'cancelled') {
-        localStorage.removeItem('bibliotech_active_order');
+      if (activeOrder.status === 'cancelled') {
+        localStorage.removeItem(ACTIVE_ORDER_KEY);
       } else {
-        localStorage.setItem('bibliotech_active_order', JSON.stringify(activeOrder));
+        localStorage.setItem(ACTIVE_ORDER_KEY, JSON.stringify(activeOrder));
+        if (activeOrder.status === 'completed') {
+          saveOrderToHistory(activeOrder);
+          localStorage.setItem(LAST_COMPLETED_KEY, JSON.stringify(activeOrder));
+          setOrderHistory(getStoredOrderHistory());
+        }
+      }
+      if (activeOrder.table_no) {
+        localStorage.setItem(TABLE_NO_KEY, activeOrder.table_no);
       }
     }
   }, [activeOrder]);
@@ -173,12 +238,18 @@ function QRSystem() {
   useEffect(() => {
     if (!activeOrder?.id) return;
 
+    if (prevStatusRef.current === null) {
+      prevStatusRef.current = activeOrder.status;
+    }
+
     const checkStatus = async () => {
       try {
         const res = await fetch(`/api/orders/${activeOrder.id}`);
         if (res.ok) {
           const data = await res.json();
           const callCount = Number(data.call_count || 0);
+          const previousStatus = prevStatusRef.current;
+          prevStatusRef.current = data.status;
 
           setActiveOrder((prev) => ({
             ...prev,
@@ -187,6 +258,27 @@ function QRSystem() {
             last_called_at: data.last_called_at
           }));
 
+          // KETIKA STAF MENEKAN "3. Cocokkan & Serahkan" (STATUS BERUBAH KE 'completed'):
+          if (data.status === 'completed' && previousStatus !== 'completed') {
+            lastHandledCallRef.current = 0;
+
+            const completedData = {
+              ...activeOrder,
+              ...data,
+              status: 'completed',
+              completed_at: data.completed_at || new Date().toISOString()
+            };
+
+            // Simpan permanen ke HP pengunjung secara senyap tanpa notifikasi suara
+            saveOrderToHistory(completedData);
+            localStorage.setItem(ACTIVE_ORDER_KEY, JSON.stringify(completedData));
+            localStorage.setItem(LAST_COMPLETED_KEY, JSON.stringify(completedData));
+            setOrderHistory(getStoredOrderHistory());
+
+            // Pastikan pengunjung tetap di tampilan tiket selesai (Step 2)
+            setStep(2);
+          }
+
           // Jika pesanan berstatus ready dan dipanggil staf (panggilan awal atau panggil ulang)
           if (data.status === 'ready') {
             const effectiveCall = Math.max(1, callCount);
@@ -194,7 +286,6 @@ function QRSystem() {
               lastHandledCallRef.current = effectiveCall;
 
               // 1. Bunyikan suara bel Ding-Dong & suara pengumuman bahasa Indonesia di HP
-              // (Tetap berbunyi bahkan saat pengunjung sedang melihat-lihat buku di katalog step 1!)
               announceTableOrder(data.table_no || activeOrder.table_no, data.ticket_code || activeOrder.ticket_code);
 
               // 2. Munculkan Notifikasi Pop-up di Layar HP jika pengguna sedang membuka tab/aplikasi lain
@@ -250,7 +341,31 @@ function QRSystem() {
 
     const timer = setInterval(checkStatus, 2500);
     return () => clearInterval(timer);
-  }, [activeOrder?.id, activeOrder?.table_no, activeOrder?.ticket_code, showConfirm]);
+  }, [activeOrder?.id, activeOrder?.table_no, activeOrder?.ticket_code, showConfirm, showAlert]);
+
+  // Beri tahu server segera saat pengunjung menutup web / tab browser / keluar
+  useEffect(() => {
+    if (!activeOrder?.id) return;
+
+    const notifyLeave = () => {
+      try {
+        const url = `/api/orders/${activeOrder.id}/leave`;
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(url);
+        } else {
+          fetch(url, { method: 'POST', keepalive: true }).catch(() => {});
+        }
+      } catch (e) {}
+    };
+
+    window.addEventListener('beforeunload', notifyLeave);
+    window.addEventListener('pagehide', notifyLeave);
+
+    return () => {
+      window.removeEventListener('beforeunload', notifyLeave);
+      window.removeEventListener('pagehide', notifyLeave);
+    };
+  }, [activeOrder?.id]);
 
 
   // Filter & Urutkan daftar buku berdasarkan pencarian, kategori, atau terfavorit
@@ -295,7 +410,7 @@ function QRSystem() {
     return filteredBooks.slice(start, start + booksPerPage);
   }, [filteredBooks, currentPage]);
 
-  // Fungsi toggle pilih buku (Maksimal 3 buku)
+  // Fungsi toggle pilih buku (Maksimal 5 buku)
   const toggleBook = (book) => {
     // Jika masih ada pesanan aktif berjalan, kunci pemilihan buku (hanya boleh lihat)
     if (hasActiveOrder) {
@@ -310,8 +425,8 @@ function QRSystem() {
     if (isAlreadySelected) {
       setSelectedBooks(selectedBooks.filter(b => b.id !== book.id && b.title !== book.title));
     } else {
-      if (selectedBooks.length >= 3) {
-        showAlert('Maksimal 3 buku sekaligus per pesanan agar staf tidak kesulitan membawanya.', {
+      if (selectedBooks.length >= 5) {
+        showAlert('Maksimal 5 buku sekaligus per pesanan agar staf tidak kesulitan membawanya.', {
           type: 'warning',
           title: 'Batas Peminjaman'
         });
@@ -360,7 +475,7 @@ function QRSystem() {
 
     setIsSubmitting(true);
 
-    const combinedTitles = selectedBooks.map(b => b.title).join(', ');
+    const combinedTitles = serializeOrderBookTitles(selectedBooks);
 
     try {
       const res = await fetch('/api/orders', {
@@ -368,6 +483,7 @@ function QRSystem() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           book_title: combinedTitles,
+          books_list: selectedBooks.map(b => b.title),
           table_no: tableNo,
         }),
       });
@@ -388,7 +504,7 @@ function QRSystem() {
       };
 
       setActiveOrder(newOrder);
-      localStorage.setItem('bibliotech_active_order', JSON.stringify(newOrder));
+      localStorage.setItem(ACTIVE_ORDER_KEY, JSON.stringify(newOrder));
       setSelectedBooks([]);
       setStep(2);
       if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
@@ -406,7 +522,7 @@ function QRSystem() {
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setActiveOrder(offlineOrder);
-      localStorage.setItem('bibliotech_active_order', JSON.stringify(offlineOrder));
+      localStorage.setItem(ACTIVE_ORDER_KEY, JSON.stringify(offlineOrder));
       setSelectedBooks([]);
       setStep(2);
     } finally {
@@ -432,19 +548,94 @@ function QRSystem() {
       });
     } catch (e) {}
 
-    localStorage.removeItem('bibliotech_active_order');
+    localStorage.removeItem(ACTIVE_ORDER_KEY);
     setActiveOrder(null);
     setSelectedBooks([]);
     setStep(1);
   };
 
-  // Selesai & Pesan Buku Baru (Hanya bisa saat status 'completed')
-  const handleOrderNewBooks = () => {
-    localStorage.removeItem('bibliotech_active_order');
+  // Selesai & Pesan Buku Baru (Arsipkan pesanan sebelumnya secara aman ke riwayat HP)
+  const handleOrderNewBooks = async () => {
+    const ok = await showConfirm(
+      'Apakah Anda ingin membuat pesanan peminjaman buku baru? Tiket Anda saat ini akan tetap tersimpan aman di Riwayat Pesanan HP Anda.',
+      {
+        title: 'Pesan Buku Baru',
+        confirmText: 'Ya, Buat Pesanan Baru',
+        cancelText: 'Tetap di Tiket Ini',
+        type: 'info'
+      }
+    );
+    if (!ok) return;
+
+    if (activeOrder) {
+      saveOrderToHistory({
+        ...activeOrder,
+        status: 'completed',
+        completed_at: activeOrder.completed_at || new Date().toISOString()
+      });
+      localStorage.setItem(LAST_COMPLETED_KEY, JSON.stringify(activeOrder));
+    }
+
+    localStorage.removeItem(ACTIVE_ORDER_KEY);
     setActiveOrder(null);
     setSelectedBooks([]);
     setStep(1);
+    setOrderHistory(getStoredOrderHistory());
   };
+
+  // Buka tiket tertentu dari modal riwayat pesanan
+  const handleViewHistoryOrder = (order) => {
+    setActiveOrder(order);
+    setStep(2);
+    setShowHistoryModal(false);
+  };
+
+  // Konfirmasi penerimaan buku oleh pengunjung (tombol "Sudah Saya Terima Bukunya")
+  const handleConfirmReceived = async () => {
+    if (!activeOrder?.id) return;
+    setIsConfirmingReceived(true);
+    try {
+      if (activeOrder.status !== 'completed') {
+        await fetch(`/api/orders/${activeOrder.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'completed' }),
+        }).catch(() => {});
+      }
+
+      const updated = {
+        ...activeOrder,
+        status: 'completed',
+        visitor_received: true,
+        received_at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      setActiveOrder(updated);
+      localStorage.setItem(ACTIVE_ORDER_KEY, JSON.stringify(updated));
+      localStorage.setItem(LAST_COMPLETED_KEY, JSON.stringify(updated));
+      saveOrderToHistory(updated);
+      setOrderHistory(getStoredOrderHistory());
+    } catch (err) {
+      console.warn('Gagal konfirmasi terima buku:', err);
+    } finally {
+      setIsConfirmingReceived(false);
+    }
+  };
+
+  // Bersihkan seluruh riwayat pesanan yang tersimpan di HP ini
+  const handleClearHistory = async () => {
+    const ok = await showConfirm('Apakah Anda yakin ingin menghapus seluruh riwayat pesanan tiket yang tersimpan di HP ini?', {
+      title: 'Hapus Riwayat Pesanan',
+      confirmText: 'Ya, Hapus Semua',
+      cancelText: 'Batal',
+      type: 'danger'
+    });
+    if (!ok) return;
+    localStorage.removeItem(ORDER_HISTORY_KEY);
+    localStorage.removeItem(LAST_COMPLETED_KEY);
+    setOrderHistory([]);
+  };
+
 
   // Handler Kirim Rating dari Modal Popup (baik dari katalog maupun tiket selesai)
   const handleRateModalSubmit = async () => {
@@ -649,47 +840,96 @@ function QRSystem() {
             </div>
           )}
 
-          {/* Banner jika pesanan selesai */}
+          {/* Quick bar Riwayat Pesanan & Tiket Tersimpan di bagian atas katalog */}
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', marginBottom: '1.2rem', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setShowHistoryModal(true)}
+              className="btn btn-secondary"
+              style={{
+                padding: '0.45rem 1.15rem',
+                fontSize: '0.84rem',
+                fontWeight: '600',
+                borderRadius: '20px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                color: '#facc15',
+                borderColor: 'rgba(250, 204, 21, 0.45)',
+                background: 'rgba(250, 204, 21, 0.08)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+              }}
+              title="Lihat riwayat tiket peminjaman yang tersimpan di HP ini"
+            >
+              <History size={15} /> Riwayat Pesanan Saya ({orderHistory.length})
+            </button>
+
+            {activeOrder && (
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                className="btn btn-secondary"
+                style={{
+                  padding: '0.45rem 1.15rem',
+                  fontSize: '0.84rem',
+                  fontWeight: '600',
+                  borderRadius: '20px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  color: activeOrder.status === 'completed' ? '#34d399' : '#818cf8',
+                  borderColor: activeOrder.status === 'completed' ? 'rgba(52, 211, 153, 0.45)' : 'rgba(99, 102, 241, 0.45)',
+                  background: activeOrder.status === 'completed' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(99, 102, 241, 0.12)'
+                }}
+                title="Buka tiket digital"
+              >
+                <Ticket size={15} /> Tiket {activeOrder.status === 'completed' ? 'Selesai' : 'Aktif'}: {activeOrder.ticket_code} ({activeOrder.table_no})
+              </button>
+            )}
+          </div>
+
+          {/* Banner jika pesanan selesai dan tersimpan di HP */}
           {!hasActiveOrder && activeOrder && activeOrder.status === 'completed' && (
             <div style={{
-              background: 'rgba(16, 185, 129, 0.15)',
-              border: '1.5px solid rgba(16, 185, 129, 0.4)',
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(6, 78, 59, 0.45))',
+              border: '1.5px solid #10b981',
               borderRadius: '14px',
-              padding: '1rem 1.2rem',
+              padding: '1.1rem 1.3rem',
               marginBottom: '1.8rem',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               flexWrap: 'wrap',
-              gap: '10px'
+              gap: '12px',
+              boxShadow: '0 4px 20px rgba(16, 185, 129, 0.2)'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <CheckCircle2 size={24} color="#34d399" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <CheckCircle2 size={26} color="#34d399" style={{ flexShrink: 0 }} />
                 <div>
-                  <div style={{ fontWeight: '700', color: '#34d399', fontSize: '0.95rem' }}>
-                    Pesanan Tiket {activeOrder.ticket_code} Telah Selesai!
+                  <div style={{ fontWeight: '800', color: '#34d399', fontSize: '0.98rem' }}>
+                    ✅ Pesanan Tiket {activeOrder.ticket_code} ({activeOrder.table_no}) Telah Selesai!
                   </div>
-                  <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
-                    Buku telah diserahkan di meja staf. Selamat membaca! Anda sekarang dapat memesan buku baru kembali.
+                  <div style={{ fontSize: '0.82rem', color: '#e2e8f0', marginTop: '2px', lineHeight: 1.4 }}>
+                    Buku telah diserahkan di meja staf &amp; <strong>tersimpan aman di HP ini</strong>. Selamat membaca! Anda dapat memberi ulasan atau memesan buku baru kembali.
                   </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <button 
                   type="button"
                   className="btn btn-secondary" 
                   onClick={() => setStep(2)}
-                  style={{ padding: '0.45rem 0.9rem', fontSize: '0.82rem' }}
+                  style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', fontWeight: '600' }}
                 >
-                  Lihat Tiket / Beri Ulasan
+                  <Ticket size={15} /> Buka Tiket / Beri Ulasan
                 </button>
                 <button 
                   type="button"
                   className="btn" 
                   onClick={handleOrderNewBooks}
-                  style={{ padding: '0.45rem 1rem', fontSize: '0.82rem', background: 'var(--primary-color)' }}
+                  style={{ padding: '0.5rem 1.1rem', fontSize: '0.85rem', fontWeight: '700', background: 'var(--primary-color)' }}
                 >
-                  Pesan Buku Baru
+                  <Plus size={15} /> Pesan Buku Baru
                 </button>
               </div>
             </div>
@@ -708,7 +948,10 @@ function QRSystem() {
             <select 
               className="form-control" 
               value={tableNo} 
-              onChange={(e) => setTableNo(e.target.value)}
+              onChange={(e) => {
+                setTableNo(e.target.value);
+                localStorage.setItem(TABLE_NO_KEY, e.target.value);
+              }}
               disabled={hasActiveOrder}
               style={{ background: 'rgba(25, 27, 36, 0.95)', fontSize: '1rem', fontWeight: '600', opacity: hasActiveOrder ? 0.75 : 1, cursor: hasActiveOrder ? 'not-allowed' : 'pointer' }}
             >
@@ -884,7 +1127,7 @@ function QRSystem() {
                   fontSize: '0.85rem', 
                   fontWeight: '700' 
                 }}>
-                  Buku Dipilih: {selectedBooks.length}/3
+                  Buku Dipilih: {selectedBooks.length}/5
                 </span>
               )}
             </div>
@@ -922,7 +1165,7 @@ function QRSystem() {
                     KERANJANG PINJAM
                   </span>
                   <span className="floating-order-count">
-                    ({selectedBooks.length}/3 Buku)
+                    ({selectedBooks.length}/5 Buku)
                   </span>
                 </div>
                 <div className="floating-order-titles" title={selectedBooks.map(b => b.title).join(' • ')}>
@@ -1247,7 +1490,7 @@ function QRSystem() {
                     KERANJANG PINJAM
                   </span>
                   <span className="floating-order-count">
-                    ({selectedBooks.length}/3 Buku)
+                    ({selectedBooks.length}/5 Buku)
                   </span>
                 </div>
                 <div className="floating-order-titles" title={selectedBooks.map(b => b.title).join(' • ')}>
@@ -1292,14 +1535,26 @@ function QRSystem() {
       {step === 2 && activeOrder && (
         <div style={{ padding: '1rem 0' }}>
           <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-            <span className="status-badge" style={{ background: 'rgba(99, 102, 241, 0.2)', color: 'var(--primary-color)', padding: '0.4rem 1rem' }}>
-              Tiket Aktif: {activeOrder.table_no}
-            </span>
-            <h1 style={{ marginTop: '0.5rem', fontSize: '1.8rem' }}>Tiket Pengambilan Digital</h1>
-            <p style={{ color: 'var(--text-muted)' }}>Tunjukkan nomor tiket ini ke staf saat penyerahan buku</p>
+            {activeOrder.status === 'completed' ? (
+              <span className="status-badge" style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', padding: '0.45rem 1.15rem', border: '1.5px solid rgba(16, 185, 129, 0.45)', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <CheckCircle2 size={16} /> Tiket Selesai: {activeOrder.table_no} (Tersimpan di HP)
+              </span>
+            ) : (
+              <span className="status-badge" style={{ background: 'rgba(99, 102, 241, 0.2)', color: 'var(--primary-color)', padding: '0.4rem 1rem' }}>
+                Tiket Aktif: {activeOrder.table_no}
+              </span>
+            )}
+            <h1 style={{ marginTop: '0.5rem', fontSize: '1.8rem' }}>
+              {activeOrder.status === 'completed' ? 'Tiket Peminjaman Selesai' : 'Tiket Pengambilan Digital'}
+            </h1>
+            <p style={{ color: 'var(--text-muted)' }}>
+              {activeOrder.status === 'completed' 
+                ? 'Buku telah diserahkan oleh staf perpustakaan. Data tiket tersimpan aman di HP Anda.'
+                : 'Tunjukkan nomor tiket ini ke staf saat penyerahan buku'}
+            </p>
 
-            {/* Tombol Cepat Jelajah Katalog Sambil Menunggu */}
-            <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center' }}>
+            {/* Tombol Cepat Navigasi Katalog & Riwayat */}
+            <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <button
                 type="button"
                 onClick={() => setStep(1)}
@@ -1319,8 +1574,30 @@ function QRSystem() {
                 }}
               >
                 <BookOpen size={16} color="#818cf8" />
-                <span>Lihat-Lihat Buku Lain di Katalog</span>
+                <span>Lihat Koleksi Buku di Katalog</span>
                 <ArrowRight size={14} color="#818cf8" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowHistoryModal(true)}
+                className="btn btn-secondary"
+                style={{
+                  padding: '0.55rem 1.25rem',
+                  borderRadius: '24px',
+                  fontSize: '0.86rem',
+                  fontWeight: '600',
+                  background: 'rgba(250, 204, 21, 0.1)',
+                  borderColor: 'rgba(250, 204, 21, 0.45)',
+                  color: '#facc15',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)'
+                }}
+              >
+                <History size={16} color="#facc15" />
+                <span>Riwayat Tiket ({orderHistory.length})</span>
               </button>
             </div>
 
@@ -1399,6 +1676,7 @@ function QRSystem() {
                 <div style={{ fontSize: '0.8rem', letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                   <img src="/Lambang.png" alt="Lambang" style={{ width: '20px', height: '20px', objectFit: 'contain' }} />
                   <img src="/logo-perpus.png" alt="Logo Perpus" style={{ width: '20px', height: '20px', objectFit: 'contain' }} onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
+                  <img src="/logo-ilkom.png" alt="Logo Ilkom" style={{ width: '20px', height: '20px', objectFit: 'contain' }} onError={(e) => { e.currentTarget.src = '/logo ilkom.jpg'; }} />
                   PERPUSTAKAAN UMUM KOTA PAREPARE
                 </div>
 
@@ -1427,7 +1705,7 @@ function QRSystem() {
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {activeOrder.book_title.split(',').map((titleWithShelf, idx) => {
+                    {parseOrderBookTitles(activeOrder.book_title, books).map((titleWithShelf, idx) => {
                       const cleanT = titleWithShelf.replace(/\[.*?\]/g, '').trim();
                       const isRated = ratedBooks[cleanT];
                       const foundBook = books.find(b => b.title.toLowerCase().trim() === cleanT.toLowerCase().trim()) || {
@@ -1503,25 +1781,58 @@ function QRSystem() {
                     <p style={{ fontSize: '0.85rem', marginTop: '4px', color: '#e2e8f0' }}>
                       Silakan menuju ke <strong>Meja Staf</strong> sekarang dan sebutkan kode <strong>{activeOrder.ticket_code}</strong>.
                     </p>
-                    <button 
-                      onClick={() => announceTableOrder(activeOrder.table_no, activeOrder.ticket_code)}
-                      style={{ 
-                        marginTop: '0.75rem',
-                        background: 'rgba(16, 185, 129, 0.25)',
-                        border: '1px solid var(--success)',
-                        color: '#d1fae5',
-                        padding: '0.35rem 0.9rem',
-                        borderRadius: '20px',
-                        fontSize: '0.8rem',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                      }}
-                    >
-                      <Volume2 size={14} /> 🔊 Dengarkan Panggilan Suara
-                    </button>
+                    <div style={{ marginTop: '0.85rem', display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <button 
+                        type="button"
+                        onClick={() => announceTableOrder(activeOrder.table_no, activeOrder.ticket_code)}
+                        style={{ 
+                          background: 'rgba(16, 185, 129, 0.25)',
+                          border: '1px solid var(--success)',
+                          color: '#d1fae5',
+                          padding: '0.38rem 0.9rem',
+                          borderRadius: '20px',
+                          fontSize: '0.8rem',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <Volume2 size={14} /> 🔊 Dengarkan Panggilan Suara
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleConfirmReceived}
+                        disabled={isConfirmingReceived}
+                        className="btn"
+                        style={{
+                          background: 'linear-gradient(135deg, #10b981, #059669)',
+                          color: '#ffffff',
+                          fontWeight: '700',
+                          fontSize: '0.84rem',
+                          padding: '0.45rem 1.15rem',
+                          borderRadius: '20px',
+                          border: 'none',
+                          boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {isConfirmingReceived ? (
+                          <>
+                            <Loader2 size={15} className="animate-spin" /> Menyimpan...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 size={15} /> Saya Sudah Terima Buku
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 ) : activeOrder.status === 'searching' ? (
                   <div style={{ background: 'rgba(99, 102, 241, 0.2)', border: '1px solid var(--primary-color)', borderRadius: '12px', padding: '1rem', textAlign: 'center', marginBottom: '1.2rem' }}>
@@ -1533,12 +1844,80 @@ function QRSystem() {
                     </p>
                   </div>
                 ) : activeOrder.status === 'completed' ? (
-                  <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '12px', padding: '1rem', textAlign: 'center', marginBottom: '1.2rem' }}>
-                    <div style={{ color: 'var(--success)', fontWeight: '700', fontSize: '1.05rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                      <CheckCircle2 size={20} /> Buku Telah Diterima!
+                  <div style={{
+                    background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(6, 78, 59, 0.5))',
+                    border: '1.5px solid #10b981',
+                    borderRadius: '14px',
+                    padding: '1.25rem',
+                    textAlign: 'center',
+                    marginBottom: '1.2rem',
+                    boxShadow: '0 0 25px rgba(16, 185, 129, 0.25)'
+                  }}>
+                    <div style={{ color: '#34d399', fontWeight: '800', fontSize: '1.12rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <CheckCircle2 size={24} /> BUKU SUDAH DISERAHKAN OLEH STAF
                     </div>
-                    <p style={{ fontSize: '0.82rem', marginTop: '4px', color: '#e2e8f0' }}>
-                      Selamat membaca! Tekan judul buku di atas kapan saja untuk memberikan bintang ulasan Anda.
+                    <p style={{ fontSize: '0.88rem', marginTop: '6px', color: '#f1f5f9', lineHeight: 1.5 }}>
+                      Buku pesanan untuk <strong>{activeOrder.table_no}</strong> ({activeOrder.ticket_code}) telah diserahkan oleh staf perpustakaan.
+                    </p>
+
+                    {/* Tombol Konfirmasi Diterima di Bagian Pengunjung */}
+                    {!activeOrder.visitor_received ? (
+                      <div style={{ marginTop: '0.9rem' }}>
+                        <button
+                          type="button"
+                          onClick={handleConfirmReceived}
+                          disabled={isConfirmingReceived}
+                          className="btn"
+                          style={{
+                            background: 'linear-gradient(135deg, #10b981, #059669)',
+                            color: '#ffffff',
+                            fontWeight: '800',
+                            fontSize: '0.92rem',
+                            padding: '0.65rem 1.4rem',
+                            borderRadius: '24px',
+                            border: 'none',
+                            boxShadow: '0 4px 20px rgba(16, 185, 129, 0.5)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {isConfirmingReceived ? (
+                            <>
+                              <Loader2 size={18} className="animate-spin" /> Menyimpan...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 size={18} /> ✅ Sudah Saya Terima Bukunya
+                            </>
+                          )}
+                        </button>
+                        <p style={{ fontSize: '0.78rem', color: '#a7f3d0', marginTop: '6px' }}>
+                          *Tekan tombol di atas untuk menandai bahwa buku fisik sudah Anda terima
+                        </p>
+                      </div>
+                    ) : (
+                      <div style={{
+                        marginTop: '0.85rem',
+                        background: 'rgba(16, 185, 129, 0.2)',
+                        border: '1.5px solid rgba(16, 185, 129, 0.5)',
+                        borderRadius: '12px',
+                        padding: '0.55rem 1.15rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        color: '#6ee7b7',
+                        fontSize: '0.88rem',
+                        fontWeight: '700'
+                      }}>
+                        <CheckCircle2 size={18} /> ✓ Buku Telah Anda Terima
+                        {activeOrder.received_at ? ` (${activeOrder.received_at})` : ''}
+                      </div>
+                    )}
+
+                    <p style={{ fontSize: '0.82rem', marginTop: '10px', color: '#cbd5e1' }}>
+                      ⭐ Silakan tekan judul buku di atas kapan saja untuk memberikan rating bintang &amp; ulasan Anda.
                     </p>
                   </div>
                 ) : (
@@ -1576,7 +1955,7 @@ function QRSystem() {
                   <AlertCircle size={16} style={{ flexShrink: 0, color: 'var(--primary-color)' }} />
                   <span>
                     {activeOrder.status === 'completed' 
-                      ? 'Pesanan telah selesai. Anda dapat memberikan rating bintang atau memesan buku baru.'
+                      ? 'Pesanan telah selesai & tersimpan di HP. Anda dapat memberikan rating bintang atau memesan buku baru.'
                       : 'Sambil menunggu, Anda dapat melihat-lihat koleksi buku lain di katalog. Suara bel akan tetap berbunyi di HP Anda begitu buku siap!'}
                   </span>
                 </div>
@@ -1591,7 +1970,7 @@ function QRSystem() {
                 <button 
                   className="btn" 
                   onClick={handleOrderNewBooks}
-                  style={{ padding: '0.75rem 2rem', fontSize: '0.95rem', background: 'var(--primary-color)', boxShadow: '0 0 20px var(--primary-glow)' }}
+                  style={{ padding: '0.75rem 1.8rem', fontSize: '0.95rem', background: 'var(--primary-color)', boxShadow: '0 0 20px var(--primary-glow)', borderRadius: '12px', fontWeight: '700' }}
                 >
                   <Plus size={18} /> Pesan Buku Baru
                 </button>
@@ -1601,6 +1980,13 @@ function QRSystem() {
                   style={{ padding: '0.75rem 1.6rem', fontSize: '0.95rem', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                 >
                   <BookOpen size={18} /> Lihat Koleksi Buku
+                </button>
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={() => setShowHistoryModal(true)}
+                  style={{ padding: '0.75rem 1.4rem', fontSize: '0.95rem', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: '8px', borderColor: 'rgba(250, 204, 21, 0.45)', color: '#facc15' }}
+                >
+                  <History size={18} /> Riwayat Pesanan ({orderHistory.length})
                 </button>
               </div>
             )}
@@ -1843,6 +2229,196 @@ function QRSystem() {
                 </div>
               </div>
             )}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL RIWAYAT PESANAN PEMINJAMAN BUKU DI HP */}
+      {/* ========================================================= */}
+      {showHistoryModal && typeof document !== 'undefined' && createPortal(
+        <div
+          className="rate-modal-backdrop"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.85)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 999999,
+            padding: '1rem',
+            overflowY: 'auto'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowHistoryModal(false);
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--surface-color, #131722)',
+              border: '1.5px solid rgba(250, 204, 21, 0.35)',
+              borderRadius: '20px',
+              padding: '1.5rem',
+              maxWidth: '560px',
+              width: '94%',
+              boxShadow: '0 25px 50px rgba(0,0,0,0.85), 0 0 30px rgba(250, 204, 21, 0.15)',
+              position: 'relative',
+              maxHeight: '88vh',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            {/* Header Modal */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.2rem', paddingBottom: '0.8rem', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#facc15', fontWeight: '800', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  <History size={16} /> Riwayat Pesanan di HP Ini
+                </div>
+                <h2 style={{ fontSize: '1.35rem', marginTop: '4px', color: '#ffffff', fontWeight: '700' }}>
+                  Daftar Peminjaman Buku
+                </h2>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted, #94a3b8)', marginTop: '2px' }}>
+                  Total {orderHistory.length} tiket peminjaman tersimpan di perangkat ini
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowHistoryModal(false)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}
+                title="Tutup"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Konten Daftar Tiket */}
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.9rem', paddingRight: '4px' }}>
+              {orderHistory.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
+                  <BookOpen size={48} color="#64748b" style={{ margin: '0 auto 1rem auto', opacity: 0.5 }} />
+                  <p style={{ fontWeight: '600', color: '#cbd5e1' }}>Belum ada riwayat pesanan yang tersimpan</p>
+                  <p style={{ fontSize: '0.8rem', marginTop: '4px' }}>Tiket yang telah diserahkan oleh staf akan otomatis tersimpan permanen di sini.</p>
+                </div>
+              ) : (
+                orderHistory.map((order, idx) => {
+                  const isCurrentActive = activeOrder?.id === order.id || activeOrder?.ticket_code === order.ticket_code;
+                  return (
+                    <div
+                      key={order.id || idx}
+                      style={{
+                        background: isCurrentActive ? 'rgba(99, 102, 241, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+                        border: isCurrentActive ? '1.5px solid #6366f1' : '1px solid rgba(255, 255, 255, 0.08)',
+                        borderRadius: '12px',
+                        padding: '1rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{
+                            background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                            color: '#ffffff',
+                            fontWeight: '800',
+                            fontSize: '0.85rem',
+                            padding: '3px 10px',
+                            borderRadius: '6px',
+                            letterSpacing: '0.5px'
+                          }}>
+                            {order.ticket_code}
+                          </span>
+                          <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#cbd5e1' }}>
+                            {order.table_no}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{
+                            background: 'rgba(16, 185, 129, 0.18)',
+                            color: '#34d399',
+                            fontSize: '0.75rem',
+                            fontWeight: '700',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}>
+                            <CheckCircle2 size={12} /> Selesai Diserahkan
+                          </span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            {order.time || ''}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Judul Buku */}
+                      <div style={{ fontSize: '0.88rem', color: '#e2e8f0', margin: '4px 0', lineHeight: 1.4 }}>
+                        📚 <strong>Buku:</strong> {order.book_title || 'Koleksi Buku Perpustakaan'}
+                      </div>
+
+                      {/* Tombol Aksi */}
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleViewHistoryOrder(order)}
+                          className="btn"
+                          style={{
+                            padding: '0.4rem 0.9rem',
+                            fontSize: '0.8rem',
+                            fontWeight: '700',
+                            borderRadius: '8px',
+                            background: isCurrentActive ? 'rgba(99, 102, 241, 0.35)' : 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px'
+                          }}
+                        >
+                          <Ticket size={14} /> {isCurrentActive ? 'Sedang Ditampilkan' : 'Buka Tiket Ini'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer Modal */}
+            <div style={{ marginTop: '1.2rem', paddingTop: '0.8rem', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              {orderHistory.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={handleClearHistory}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#f87171',
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '4px 8px'
+                  }}
+                  title="Hapus riwayat pesanan dari HP"
+                >
+                  <Trash2 size={14} /> Bersihkan Riwayat
+                </button>
+              ) : <div />}
+              <button
+                type="button"
+                onClick={() => setShowHistoryModal(false)}
+                className="btn btn-secondary"
+                style={{ padding: '0.45rem 1.2rem', fontSize: '0.85rem' }}
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>,
         document.body

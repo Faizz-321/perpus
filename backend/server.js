@@ -248,6 +248,7 @@ function setupAllTables() {
     pool.query('ALTER TABLE orders MODIFY COLUMN table_no VARCHAR(100) NOT NULL', () => {});
     pool.query('ALTER TABLE orders ADD COLUMN call_count INT DEFAULT 0', () => {});
     pool.query('ALTER TABLE orders ADD COLUMN last_called_at DATETIME NULL', () => {});
+    pool.query('ALTER TABLE orders ADD COLUMN visitor_last_seen DATETIME NULL', () => {});
   });
 
 
@@ -422,7 +423,24 @@ app.get('/api/health', (req, res) => {
 // FITUR 1: ORDERS (Pemesanan Pinjam Buku via Meja/QR)
 // ------------------------------------------
 
-// Ambil semua data pesanan
+// Map Kehadiran Real-Time Pengunjung di Web: orderId -> timestamp (ms)
+const visitorPresenceMap = new Map();
+
+function markVisitorOnline(orderId) {
+  if (!orderId) return;
+  const numId = Number(orderId);
+  visitorPresenceMap.set(numId, Date.now());
+  pool.query('UPDATE orders SET visitor_last_seen = NOW() WHERE id = ?', [numId], () => {});
+}
+
+function markVisitorOffline(orderId) {
+  if (!orderId) return;
+  const numId = Number(orderId);
+  visitorPresenceMap.delete(numId);
+  pool.query('UPDATE orders SET visitor_last_seen = DATE_SUB(NOW(), INTERVAL 1 MINUTE) WHERE id = ?', [numId], () => {});
+}
+
+// Ambil semua data pesanan (dengan status kehadiran pengunjung di web)
 app.get('/api/orders', checkDb, (req, res) => {
   const query = 'SELECT * FROM orders ORDER BY created_at DESC';
   pool.query(query, (err, results) => {
@@ -430,13 +448,37 @@ app.get('/api/orders', checkDb, (req, res) => {
       console.error('Error GET /api/orders:', err);
       return res.status(500).json({ error: 'Gagal mengambil data pesanan', detail: err.message });
     }
-    res.json(results);
+    const now = Date.now();
+    const enrichedResults = results.map(row => {
+      const memLastSeen = visitorPresenceMap.get(row.id) || 0;
+      const dbLastSeen = row.visitor_last_seen ? new Date(row.visitor_last_seen).getTime() : 0;
+      const effectiveLastSeen = Math.max(memLastSeen, dbLastSeen);
+      // Dianggap aktif di web jika ada aktivitas/ping dalam 8 detik terakhir
+      const isOnline = (now - effectiveLastSeen) < 8000;
+      return {
+        ...row,
+        visitor_online: isOnline,
+        visitor_last_seen_ms: effectiveLastSeen || null
+      };
+    });
+    res.json(enrichedResults);
   });
 });
 
 // Buat pesanan baru dari meja pengunjung
 app.post('/api/orders', checkDb, (req, res) => {
-  const { book_title, table_no } = req.body;
+  let { book_title, table_no, books_list } = req.body;
+
+  // Jika books_list dikirim sebagai array, simpan sebagai JSON array yang aman agar judul berkoma tidak terbelah
+  if (Array.isArray(books_list) && books_list.length > 0) {
+    const titles = books_list
+      .map(b => (typeof b === 'string' ? b.trim() : (b?.title || '')).trim())
+      .filter(Boolean);
+    book_title = JSON.stringify(titles);
+  } else if (Array.isArray(book_title)) {
+    book_title = JSON.stringify(book_title);
+  }
+
   if (!book_title || !table_no) {
     return res.status(400).json({ error: 'Judul buku dan nomor meja wajib diisi' });
   }
@@ -445,13 +487,14 @@ app.post('/api/orders', checkDb, (req, res) => {
   const randomNum = Math.floor(1000 + Math.random() * 9000);
   const ticket_code = `TKT-${randomNum}`;
   const status = 'pending';
-  const query = 'INSERT INTO orders (ticket_code, book_title, table_no, status) VALUES (?, ?, ?, ?)';
+  const query = 'INSERT INTO orders (ticket_code, book_title, table_no, status, visitor_last_seen) VALUES (?, ?, ?, ?, NOW())';
 
   pool.query(query, [ticket_code, book_title, table_no, status], (err, result) => {
     if (err) {
       console.error('Error POST /api/orders:', err);
       return res.status(500).json({ error: 'Gagal membuat pesanan baru', detail: err.message });
     }
+    markVisitorOnline(result.insertId);
     res.status(201).json({
       message: 'Pesanan berhasil dibuat!',
       orderId: result.insertId,
@@ -473,8 +516,28 @@ app.get('/api/orders/:id', checkDb, (req, res) => {
     if (results.length === 0) {
       return res.status(404).json({ error: 'Pesanan tidak ditemukan' });
     }
-    res.json(results[0]);
+    const order = results[0];
+    // Pengunjung sedang aktif di web melihat tiketnya
+    markVisitorOnline(order.id);
+    res.json({
+      ...order,
+      visitor_online: true
+    });
   });
+});
+
+// Endpoint Heartbeat / Ping dari Pengunjung yang masih aktif di halaman web
+app.post('/api/orders/:id/ping', checkDb, (req, res) => {
+  const { id } = req.params;
+  markVisitorOnline(id);
+  res.json({ ok: true, visitor_online: true });
+});
+
+// Endpoint saat Pengunjung Menutup Web / Meninggalkan Halaman (Beacon)
+app.post('/api/orders/:id/leave', checkDb, (req, res) => {
+  const { id } = req.params;
+  markVisitorOffline(id);
+  res.json({ ok: true, visitor_online: false });
 });
 
 // Update status pesanan (oleh staf perpustakaan)
@@ -485,6 +548,10 @@ app.put('/api/orders/:id', checkDb, (req, res) => {
   const validStatuses = ['pending', 'searching', 'ready', 'completed', 'cancelled'];
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ error: 'Status tidak valid' });
+  }
+
+  if (status === 'completed' || status === 'cancelled') {
+    visitorPresenceMap.delete(Number(id));
   }
 
   const isReady = status === 'ready';
