@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Send, Loader2, Ticket, CheckCircle2, Clock, Search, BookOpen, AlertCircle, XCircle, Plus, Check, ChevronLeft, ChevronRight, ChevronDown, Bookmark, MapPin, Volume2, Star, Flame, Sparkles, MessageSquare, Bell, Lock, Eye, ArrowRight, History, Trash2 } from 'lucide-react';
 import { announceTableOrder } from '../utils/soundAnnouncement';
+import { requestBrowserNotificationPermission, sendBrowserNotification } from '../utils/webNotification';
 import { useModal } from '../context/ModalContext';
 import { parseOrderBookTitles, serializeOrderBookTitles } from '../utils/orderBooks';
 import { normalizeTableParam, ALL_LIBRARY_TABLES } from '../utils/tableUtils';
@@ -145,21 +146,42 @@ function QRSystem() {
     }
     return 'unsupported';
   });
+  const [isTestingNotif, setIsTestingNotif] = useState(false);
 
   const requestNotifPermission = async () => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      try {
-        const perm = await Notification.requestPermission();
-        setNotifPermission(perm);
-        if (perm === 'granted') {
-          new Notification('🔔 Notifikasi Panggilan Aktif', {
-            body: 'HP Anda akan berbunyi saat buku selesai disiapkan staf perpustakaan!',
-            icon: '/Lambang.png'
-          });
-        }
-      } catch (e) {
-        console.warn('Izin notifikasi gagal:', e);
+    try {
+      const perm = await requestBrowserNotificationPermission();
+      setNotifPermission(perm);
+      if (perm === 'granted') {
+        showAlert('Notifikasi HP berhasil diaktifkan! Notifikasi pop-up & getar HP telah dikirim sebagai konfirmasi.', {
+          title: '🔔 Notifikasi Aktif'
+        });
+      } else if (perm === 'denied') {
+        showAlert('Izin notifikasi ditolak di browser HP Anda. Silakan ketuk ikon gembok/pengaturan situs di samping URL browser untuk mengizinkan notifikasi.', {
+          title: '⚠️ Notifikasi Ditolak'
+        });
       }
+    } catch (e) {
+      console.warn('Izin notifikasi gagal:', e);
+    }
+  };
+
+  const handleTestNotification = async () => {
+    setIsTestingNotif(true);
+    try {
+      // 1. Bunyikan suara bel Ding-Dong & suara pengumuman bahasa Indonesia
+      announceTableOrder(tableNo || 'Meja 1', 'TES-01');
+
+      // 2. Kirim notifikasi pop-up & getar HP via Service Worker
+      await sendBrowserNotification('🔔 Tes Notifikasi HP Berhasil!', {
+        body: `Uji coba berhasil untuk ${tableNo || 'Meja Anda'}! HP Anda akan berbunyi dan bergetar seperti ini saat buku selesai disiapkan staf perpustakaan.`,
+        tag: 'test-perpus-notif',
+        renotify: true
+      });
+    } catch (err) {
+      console.warn('Gagal uji coba notifikasi:', err);
+    } finally {
+      setTimeout(() => setIsTestingNotif(false), 1500);
     }
   };
 
@@ -312,30 +334,23 @@ function QRSystem() {
               // 1. Bunyikan suara bel Ding-Dong & suara pengumuman bahasa Indonesia di HP
               announceTableOrder(data.table_no || activeOrder.table_no, data.ticket_code || activeOrder.ticket_code);
 
-              // 2. Munculkan Notifikasi Pop-up di Layar HP jika pengguna sedang membuka tab/aplikasi lain
-              if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-                try {
-                  const isRecall = effectiveCall > 1;
-                  const notifTitle = isRecall 
-                    ? `📢 PANGGILAN ULANG: ${data.table_no || activeOrder.table_no}`
-                    : `📚 BUKU SIAP DIAMBIL: ${data.table_no || activeOrder.table_no}`;
+              // 2. Munculkan Notifikasi Pop-up & Getar di Layar HP pengunjung (via Service Worker untuk Android/iOS/Desktop)
+              const isRecall = effectiveCall > 1;
+              const notifTitle = isRecall 
+                ? `📢 PANGGILAN ULANG: ${data.table_no || activeOrder.table_no}`
+                : `📚 BUKU SIAP DIAMBIL: ${data.table_no || activeOrder.table_no}`;
 
-                  const notif = new Notification(notifTitle, {
-                    body: `Tiket ${data.ticket_code || activeOrder.ticket_code}: Pesanan buku Anda sudah siap. Silakan mengambilnya di meja staf perpustakaan!`,
-                    icon: '/Lambang.png',
-                    badge: '/Lambang.png',
-                    tag: `perpus-order-call-${activeOrder.id}-${effectiveCall}`,
-                    renotify: true
-                  });
-
-                  notif.onclick = () => {
-                    window.focus();
-                    announceTableOrder(data.table_no || activeOrder.table_no, data.ticket_code || activeOrder.ticket_code);
-                  };
-                } catch (e) {
-                  console.warn('Gagal memicu notification browser:', e);
+              sendBrowserNotification(notifTitle, {
+                body: `Tiket ${data.ticket_code || activeOrder.ticket_code}: Pesanan buku Anda sudah siap. Silakan mengambilnya di meja staf perpustakaan!`,
+                icon: '/Lambang.png',
+                badge: '/Lambang.png',
+                tag: `perpus-order-call-${activeOrder.id}-${effectiveCall}`,
+                renotify: true,
+                onClick: () => {
+                  if (typeof window !== 'undefined') window.focus();
+                  announceTableOrder(data.table_no || activeOrder.table_no, data.ticket_code || activeOrder.ticket_code);
                 }
-              }
+              }).catch(e => console.warn('Gagal kirim notifikasi browser:', e));
 
               // 3. Jika pengguna sedang asyik di halaman katalog (step 1), munculkan konfirmasi cepat untuk langsung buka tiket
               if (stepRef.current === 1) {
@@ -1754,19 +1769,50 @@ function QRSystem() {
               <div style={{
                 margin: '0.8rem auto 0',
                 maxWidth: '460px',
-                background: 'rgba(16, 185, 129, 0.1)',
-                border: '1px solid rgba(16, 185, 129, 0.3)',
-                borderRadius: '10px',
-                padding: '0.45rem 1rem',
+                background: 'rgba(16, 185, 129, 0.12)',
+                border: '1px solid rgba(16, 185, 129, 0.35)',
+                borderRadius: '12px',
+                padding: '0.55rem 1rem',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                fontSize: '0.78rem',
-                color: '#6ee7b7',
-                fontWeight: '600'
+                justifyContent: 'space-between',
+                gap: '10px',
+                flexWrap: 'wrap'
               }}>
-                <CheckCircle2 size={15} /> Notifikasi HP Aktif (HP akan berbunyi saat dipanggil staf)
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '0.8rem',
+                  color: '#6ee7b7',
+                  fontWeight: '600'
+                }}>
+                  <CheckCircle2 size={16} color="#34d399" />
+                  <span>Notifikasi HP Aktif (Siap Bunyi)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleTestNotification}
+                  disabled={isTestingNotif}
+                  className="btn"
+                  style={{
+                    padding: '0.35rem 0.75rem',
+                    fontSize: '0.75rem',
+                    fontWeight: '700',
+                    background: 'rgba(16, 185, 129, 0.25)',
+                    border: '1px solid rgba(16, 185, 129, 0.6)',
+                    color: '#ffffff',
+                    borderRadius: '8px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    cursor: 'pointer'
+                  }}
+                  title="Klik untuk mencoba bunyi bel dan getar notifikasi di HP Anda"
+                >
+                  <Volume2 size={14} color="#6ee7b7" />
+                  {isTestingNotif ? 'Berbunyi...' : 'Tes Notif & Getar'}
+                </button>
               </div>
             )}
           </div>

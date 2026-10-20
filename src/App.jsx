@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useRef, Component } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate, useSearchParams } from 'react-router-dom';
-import { BookOpen, Users, Package, Home as HomeIcon, Bell, LogOut, Shield, ChevronDown, Volume2, VolumeX, BookPlus, X } from 'lucide-react';
+import { 
+  BookOpen, Users, Package, Home as HomeIcon, Bell, LogOut, 
+  Shield, ChevronDown, Volume2, VolumeX, BookPlus, X, QrCode 
+} from 'lucide-react';
 import Home from './components/Home';
 import QRSystem from './components/QRSystem';
 import StaffDashboard from './components/StaffDashboard';
@@ -263,6 +266,31 @@ function StaffNav({ onLogout, notifCount }) {
           <Shield size={18} />
           Dashboard Staf
         </Link>
+
+        {/* Akses Cepat Barcode Meja di Navigasi Atas */}
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent('open_table_qr_modal'))}
+          className="nav-link nav-link-barcode-top"
+          title="Buka & Cetak Stiker Barcode Meja (QR Code)"
+          style={{
+            background: 'rgba(16, 185, 129, 0.12)',
+            border: '1px solid rgba(16, 185, 129, 0.35)',
+            borderRadius: '9px',
+            padding: '0.42rem 0.85rem',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '7px',
+            fontSize: '0.86rem',
+            fontWeight: '700',
+            color: '#34d399',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          <QrCode size={16} color="#10b981" />
+          <span>Barcode Meja</span>
+        </button>
 
         {/* Bell Notifikasi Pesanan Masuk */}
         <div style={{ position: 'relative' }}>

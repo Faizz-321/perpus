@@ -17,6 +17,14 @@ import TableQRModal from './TableQRModal';
 function StaffDashboard() {
   const { showAlert, showConfirm } = useModal();
   const [showTableQrModal, setShowTableQrModal] = useState(false);
+
+  // Dengarkan event pembukaan modal barcode meja dari navigasi atas
+  useEffect(() => {
+    const handleOpenTableQr = () => setShowTableQrModal(true);
+    window.addEventListener('open_table_qr_modal', handleOpenTableQr);
+    return () => window.removeEventListener('open_table_qr_modal', handleOpenTableQr);
+  }, []);
+
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTabParam = searchParams.get('tab');
   const activeModule = (currentTabParam === 'lost_found' || currentTabParam === 'import_books' || currentTabParam === 'books')
@@ -913,9 +921,28 @@ function StaffDashboard() {
           </div>
         </div>
 
-        <div className="staff-portal-status">
-          <span className="staff-status-dot"></span>
-          <span>{isDbConnected ? 'MySQL XAMPP Terhubung' : 'Mode Offline'}</span>
+        <div className="staff-portal-header-actions">
+          {/* Tombol Cepat Barcode Meja: Langsung Kelihatan di Bagian Paling Atas Tanpa Perlu Scroll! */}
+          <button 
+            type="button"
+            className="staff-header-qr-btn"
+            onClick={() => setShowTableQrModal(true)}
+            title="Buka generator & cetak stiker Barcode Meja (QR Code) untuk ditempel di meja pengunjung"
+          >
+            <div className="staff-header-qr-icon">
+              <QrCode size={19} />
+            </div>
+            <div className="staff-header-qr-content">
+              <span className="staff-header-qr-title">Barcode Meja Pengunjung</span>
+              <span className="staff-header-qr-sub">Cetak & Bagikan QR 24 Meja</span>
+            </div>
+            <span className="staff-header-qr-pill">Buka QR</span>
+          </button>
+
+          <div className="staff-portal-status">
+            <span className="staff-status-dot"></span>
+            <span>{isDbConnected ? 'MySQL XAMPP Terhubung' : 'Mode Offline'}</span>
+          </div>
         </div>
       </div>
 
