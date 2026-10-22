@@ -37,6 +37,14 @@ function Home() {
           <p style={{ color: '#cbd5e1', fontWeight: '500', lineHeight: 1.6 }}>Scan QR di meja Anda, pilih buku dari katalog digital, staf kami akan menyiapkannya untuk Anda.</p>
         </div>
 
+        <div className="feature-card glass-panel" onClick={() => navigate('/ebooks')} style={{ cursor: 'pointer', transition: 'all 0.25s ease' }}>
+          <div className="feature-icon-wrapper" style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(6, 182, 212, 0.25))', color: '#34d399', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.2)' }}>
+            <BookOpen size={32} />
+          </div>
+          <h3 style={{ fontWeight: '800', fontSize: '1.3rem', color: '#ffffff', marginBottom: '0.3rem' }}>Baca E-Book Online</h3>
+          <p style={{ color: '#cbd5e1', fontWeight: '500', lineHeight: 1.6 }}>900+ koleksi buku digital resmi (Novel, Biografi, Inspirasi, Tips & Trik, Bacaan Anak). Baca langsung gratis di HP.</p>
+        </div>
+
         <div className="feature-card glass-panel" onClick={() => navigate('/lost-found')} style={{ cursor: 'pointer', transition: 'all 0.25s ease' }}>
           <div className="feature-icon-wrapper" style={{ background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.25))', color: '#fbbf24', boxShadow: '0 4px 15px rgba(245, 158, 11, 0.2)' }}>
             <Package size={32} />

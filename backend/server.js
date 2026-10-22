@@ -419,6 +419,50 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Proxy & Cache Thumbnail E-Book Google Drive (Menghindari 429 Rate Limit Google)
+app.get('/api/ebooks/cover/:id', (req, res) => {
+  const fileId = req.params.id;
+  if (!fileId || !/^[a-zA-Z0-9_-]+$/.test(fileId)) {
+    return res.status(400).send('Invalid file ID');
+  }
+
+  const localPng = path.join(COVERS_DIR, `${fileId}.png`);
+  if (fs.existsSync(localPng)) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    return res.sendFile(localPng);
+  }
+
+  const localJpg = path.join(COVERS_DIR, `${fileId}.jpg`);
+  if (fs.existsSync(localJpg)) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    return res.sendFile(localJpg);
+  }
+
+  // Ambil langsung dari Google UserContent tanpa referer dev server
+  const https = require('https');
+  const googleUrl = `https://lh3.googleusercontent.com/d/${fileId}=w400`;
+
+  https.get(googleUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+    }
+  }, (gRes) => {
+    if (gRes.statusCode === 200 && gRes.headers['content-type'] && gRes.headers['content-type'].includes('image')) {
+      res.setHeader('Content-Type', gRes.headers['content-type']);
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      if (!fs.existsSync(COVERS_DIR)) fs.mkdirSync(COVERS_DIR, { recursive: true });
+      const fileStream = fs.createWriteStream(localPng);
+      gRes.pipe(fileStream);
+      gRes.pipe(res);
+    } else {
+      res.status(gRes.statusCode || 404).send('Cover not found');
+    }
+  }).on('error', (err) => {
+    res.status(500).send(err.message);
+  });
+});
+
 // ------------------------------------------
 // FITUR 1: ORDERS (Pemesanan Pinjam Buku via Meja/QR)
 // ------------------------------------------
@@ -1474,6 +1518,34 @@ app.get('/api/tts', async (req, res) => {
     res.status(500).json({ error: 'Gagal memproses suara TTS' });
   }
 });
+
+// ------------------------------------------
+// FITUR 6: E-BOOK DIGITAL GOOGLE DRIVE
+// ------------------------------------------
+app.get('/api/ebooks', (req, res) => {
+  try {
+    const ebooksPath = path.join(__dirname, '../src/data/ebooksData.json');
+    if (!fs.existsSync(ebooksPath)) {
+      return res.json([]);
+    }
+    const raw = fs.readFileSync(ebooksPath, 'utf8');
+    const list = JSON.parse(raw);
+    const { category, q } = req.query;
+    let result = list;
+    if (category && category !== 'ALL') {
+      result = result.filter(b => b.category === category);
+    }
+    if (q) {
+      const query = q.toLowerCase();
+      result = result.filter(b => b.title.toLowerCase().includes(query) || (b.category && b.category.toLowerCase().includes(query)));
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('Error GET /api/ebooks:', err);
+    res.status(500).json({ error: 'Gagal memuat katalog e-book' });
+  }
+});
+
 
 // Menyalakan Server
 const PORT = process.env.PORT || 5000;

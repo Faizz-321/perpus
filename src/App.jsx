@@ -9,6 +9,7 @@ import QRSystem from './components/QRSystem';
 import StaffDashboard from './components/StaffDashboard';
 import LostFound from './components/LostFound';
 import LoginPage from './components/LoginPage';
+import EBookReader from './components/EBookReader';
 import { ModalProvider, useModal } from './context/ModalContext';
 import { playNewOrderAlarm } from './utils/soundAnnouncement';
 import { formatOrderBookTitles } from './utils/orderBooks';
@@ -92,6 +93,10 @@ function CustomerNav({ onLogout }) {
         <Link to="/qr-system" className={`nav-link ${location.pathname === '/qr-system' ? 'active' : ''}`}>
           <BookOpen size={20} />
           Pesan Pinjam Buku
+        </Link>
+        <Link to="/ebooks" className={`nav-link ${location.pathname === '/ebooks' ? 'active' : ''}`}>
+          <BookPlus size={20} />
+          Baca E-Book Online
         </Link>
         <Link to="/lost-found" className={`nav-link ${location.pathname === '/lost-found' ? 'active' : ''}`}>
           <Package size={20} />
@@ -265,6 +270,11 @@ function StaffNav({ onLogout, notifCount }) {
         <Link to="/staff" className={`nav-link ${location.pathname === '/staff' ? 'active' : ''}`}>
           <Shield size={18} />
           Dashboard Staf
+        </Link>
+
+        <Link to="/ebooks" className={`nav-link ${location.pathname === '/ebooks' ? 'active' : ''}`}>
+          <BookPlus size={18} />
+          E-Book
         </Link>
 
         {/* Akses Cepat Barcode Meja di Navigasi Atas */}
@@ -503,10 +513,13 @@ function CustomerMobileNav({ onLogout }) {
         <HomeIcon size={20} /><span>Beranda</span>
       </Link>
       <Link to="/qr-system" className={`mobile-nav-item ${location.pathname === '/qr-system' ? 'active' : ''}`}>
-        <BookOpen size={20} /><span>Pinjam Buku</span>
+        <BookOpen size={20} /><span>Pinjam</span>
+      </Link>
+      <Link to="/ebooks" className={`mobile-nav-item ${location.pathname === '/ebooks' ? 'active' : ''}`}>
+        <BookPlus size={20} /><span>E-Book</span>
       </Link>
       <Link to="/lost-found" className={`mobile-nav-item ${location.pathname === '/lost-found' ? 'active' : ''}`}>
-        <Package size={20} /><span>Barang Hilang</span>
+        <Package size={20} /><span>Hilang</span>
       </Link>
       <button
         type="button"
@@ -627,6 +640,7 @@ function App() {
               <ErrorBoundary>
                 <Routes>
                   <Route path="/staff" element={<StaffDashboard />} />
+                  <Route path="/ebooks" element={<EBookReader />} />
                   <Route path="*" element={<Navigate to="/staff" replace />} />
                 </Routes>
               </ErrorBoundary>
@@ -649,6 +663,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/qr-system" element={<QRSystem />} />
+                <Route path="/ebooks" element={<EBookReader />} />
                 <Route path="/lost-found" element={<LostFound />} />
                 {/* Customer tidak bisa akses staff */}
                 <Route path="/staff" element={<Navigate to="/" replace />} />
