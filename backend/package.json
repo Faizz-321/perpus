@@ -9,6 +9,7 @@
     "sync:covers": "node sync_online_covers.js",
     "sync:isbn": "node sync_isbnsearch_books.js",
     "setup:300": "node setup_300_original_books.js",
+    "sync:all-covers": "node sync_all_covered_books.js",
     "import:all": "node import_all_books.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
