@@ -301,7 +301,7 @@ function BulkBookImport() {
     const unchecked = toSave.filter((r) => NEEDS_CHECK.has(r.confidence)).length;
     const ok = await showConfirm(
       `Simpan ${toSave.length} buku ke katalog?` +
-        (unchecked ? `\n\n⚠️ Masih ada ${unchecked} buku yang ditandai perlu dicek / tanpa sampul.` : ''),
+        (unchecked ? `\n\nMasih ada ${unchecked} buku yang ditandai perlu dicek / tanpa sampul.` : ''),
       { title: 'Simpan ke Katalog', confirmText: 'Ya, Simpan', cancelText: 'Periksa Lagi', type: unchecked ? 'warning' : 'info' }
     );
     if (!ok) return;
@@ -446,7 +446,7 @@ function BulkBookImport() {
               style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(16, 185, 129, 0.15)', borderColor: 'rgba(16, 185, 129, 0.4)', color: '#a7f3d0' }}
               onClick={handleLoadSampleFiles}
             >
-              <Sparkles size={14} color="#34d399" /> ⚡ Coba dengan 15 Sampel Otomatis
+              <Sparkles size={14} color="#34d399" /> Coba dengan 15 Sampel Otomatis
             </button>
           </div>
 
@@ -729,7 +729,7 @@ function BulkBookImport() {
               <Filter size={15} /> Tampilkan hanya yang perlu dicek ({stats.check})
             </label>
             <span className="bbi-muted bbi-small">
-              💡 <strong>Tips:</strong> Klik foto sampul buku untuk mengganti atau menukarnya langsung.
+              <strong>Tips:</strong> Klik foto sampul buku untuk mengganti atau menukarnya langsung.
             </span>
           </div>
 
@@ -826,7 +826,7 @@ function BulkBookImport() {
                 <ArrowLeft size={16} /> Ulangi dari Awal
               </button>
               <span className="bbi-muted bbi-small" style={{ color: '#cbd5e1' }}>
-                ✓ Siap menyimpan <strong>{stats.included}</strong> dari {stats.total} buku yang dipilih
+                Siap menyimpan <strong>{stats.included}</strong> dari {stats.total} buku yang dipilih
               </span>
             </div>
 
@@ -898,7 +898,7 @@ function BulkBookImport() {
                     <img src={c.dataUrl} alt={c.source} />
                     <span className="bbi-picker-src">{c.source}</span>
                     <span className="bbi-picker-owner">
-                      {isCurrent ? '✓ Sampul saat ini' : owner ? `Dipakai #${owner.no} (akan ditukar)` : 'Belum terpakai'}
+                      {isCurrent ? 'Sampul saat ini' : owner ? `Dipakai #${owner.no} (akan ditukar)` : 'Belum terpakai'}
                     </span>
                   </button>
                 );

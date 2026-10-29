@@ -314,7 +314,7 @@ export default function TableMonitoring() {
           <div className="tv-announcement-ticker">
             <div className="ticker-badge">PENGUMUMAN LOBBY</div>
             <div className="ticker-text">
-              🏛️ Selamat Datang di Perpustakaan Umum Kota Parepare • Jam Layanan: 08.00 - 16.00 WITA • Silakan pilih meja hijau yang masih tersedia • Scan QR Code di meja Anda untuk memesan buku langsung tanpa antre.
+              Selamat Datang di Perpustakaan Umum Kota Parepare • Jam Layanan: 08.00 - 16.00 WITA • Silakan pilih meja hijau yang masih tersedia • Scan QR Code di meja Anda untuk memesan buku langsung tanpa antre.
             </div>
           </div>
         )}
@@ -434,15 +434,15 @@ export default function TableMonitoring() {
         <div className="floorplan-layout-boundary">
           <div className="room-landmark entrance-landmark">
             <div className="landmark-line"></div>
-            <div className="landmark-tag">🚪 PINTU MASUK UTAMA / LOBBY PERPUSTAKAAN</div>
+            <div className="landmark-tag">PINTU MASUK UTAMA / LOBBY PERPUSTAKAAN</div>
           </div>
 
           <div className="room-landmark staff-landmark">
-            <div className="landmark-tag">💼 MEJA LAYANAN & PENGAMBILAN BUKU (STAF)</div>
+            <div className="landmark-tag">MEJA LAYANAN & PENGAMBILAN BUKU (STAF)</div>
           </div>
 
           <div className="room-landmark bookshelf-landmark">
-            <div className="landmark-tag">📚 LEMARI KOLEKSI BUKU & SASTRA (RAK 1 - 5)</div>
+            <div className="landmark-tag">LEMARI KOLEKSI BUKU & SASTRA (RAK 1 - 5)</div>
           </div>
 
           {/* Grid Tata Letak Meja */}

@@ -39,7 +39,7 @@ export async function requestBrowserNotificationPermission() {
       } catch (e) {}
 
       // Kirim notifikasi pertama sebagai konfirmasi aktif
-      await sendBrowserNotification('🔔 Notifikasi Panggilan Aktif', {
+      await sendBrowserNotification('Notifikasi Panggilan Aktif', {
         body: 'HP Anda akan berbunyi & bergetar saat pesanan buku siap diambil di meja staf!',
         tag: 'welcome-perpus-parepare'
       });

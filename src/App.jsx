@@ -121,6 +121,8 @@ function CustomerNav({ onLogout }) {
 // ======================================================
 function StaffNav({ onLogout, notifCount }) {
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const currentTab = searchParams.get('tab') || 'portal';
   const { showConfirm } = useModal();
   const [showNotif, setShowNotif] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -241,7 +243,7 @@ function StaffNav({ onLogout, notifCount }) {
 
   return (
     <header className="app-header" style={{ borderBottom: '1px solid rgba(16,185,129,0.3)' }}>
-      <Link to="/staff" className="logo-area">
+      <Link to="/staff?tab=portal" className="logo-area" title="Ke Beranda Portal Staf">
         <div className="logos-group">
           <img src="/Lambang.png" alt="Lambang Kota Parepare" className="logo-img" />
           <img src="/logo-perpus.png" alt="Logo Dinas Perpustakaan" className="logo-img" onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
@@ -267,9 +269,20 @@ function StaffNav({ onLogout, notifCount }) {
       </button>
 
       <nav className="nav-links" style={{ alignItems: 'center' }}>
-        <Link to="/staff" className={`nav-link ${location.pathname === '/staff' ? 'active' : ''}`}>
+        <Link 
+          to="/staff?tab=portal" 
+          className={`nav-link ${location.pathname === '/staff' && (currentTab === 'portal' || !searchParams.get('tab')) ? 'active' : ''}`}
+        >
+          <HomeIcon size={18} />
+          Beranda Staf
+        </Link>
+
+        <Link 
+          to="/staff?tab=orders" 
+          className={`nav-link ${location.pathname === '/staff' && currentTab === 'orders' ? 'active' : ''}`}
+        >
           <Shield size={18} />
-          Dashboard Staf
+          Antrean Pesanan
         </Link>
 
         <Link to="/ebooks" className={`nav-link ${location.pathname === '/ebooks' ? 'active' : ''}`}>
@@ -389,13 +402,13 @@ function StaffNav({ onLogout, notifCount }) {
                       }}
                       title="Uji coba nada alarm notifikasi pesanan"
                     >
-                      Tes Alarm 🔔
+                      Tes Alarm
                     </button>
                   </div>
                 </div>
                 {notifications.length === 0 ? (
                   <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
-                    ✅ Tidak ada pesanan pending
+                    Tidak ada pesanan pending
                   </div>
                 ) : (
                   <div>
@@ -462,7 +475,7 @@ function StaffNav({ onLogout, notifCount }) {
           </div>
           <div className="new-order-toast-content">
             <div className="new-order-toast-title">
-              🔔 Pesanan Baru Masuk! {newOrderToast.count > 1 ? `(${newOrderToast.count} Pesanan)` : ''}
+              Pesanan Baru Masuk! {newOrderToast.count > 1 ? `(${newOrderToast.count} Pesanan)` : ''}
               {!alarmSoundEnabled && (
                 <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#f87171', background: 'rgba(239,68,68,0.15)', padding: '1px 5px', borderRadius: '4px', marginLeft: '6px' }}>
                   Hening
@@ -537,8 +550,9 @@ function CustomerMobileNav({ onLogout }) {
 // MOBILE NAV STAFF
 // ======================================================
 function StaffMobileNav({ onLogout }) {
+  const location = useLocation();
   const [searchParams] = useSearchParams();
-  const currentTab = searchParams.get('tab') || 'orders';
+  const currentTab = searchParams.get('tab') || 'portal';
   const { showConfirm } = useModal();
 
   const handleStaffLogoutClick = async () => {
@@ -554,11 +568,25 @@ function StaffMobileNav({ onLogout }) {
   return (
     <nav className="mobile-bottom-nav">
       <Link 
-        to="/staff" 
-        className={`mobile-nav-item ${currentTab === 'orders' ? 'active' : ''}`}
+        to="/staff?tab=portal" 
+        className={`mobile-nav-item ${location.pathname === '/staff' && (currentTab === 'portal' || !searchParams.get('tab')) ? 'active' : ''}`}
+        title="Beranda Portal Staf"
+      >
+        <HomeIcon size={20} /><span>Beranda</span>
+      </Link>
+      <Link 
+        to="/staff?tab=orders" 
+        className={`mobile-nav-item ${location.pathname === '/staff' && currentTab === 'orders' ? 'active' : ''}`}
         title="Antrean Pesanan Tiket"
       >
-        <Shield size={20} /><span>Dashboard</span>
+        <Shield size={20} /><span>Pesanan</span>
+      </Link>
+      <Link 
+        to="/ebooks" 
+        className={`mobile-nav-item ${location.pathname === '/ebooks' ? 'active' : ''}`}
+        title="Katalog E-Book"
+      >
+        <BookOpen size={20} /><span>E-Book</span>
       </Link>
       <Link 
         to="/staff?tab=lost_found" 
@@ -639,9 +667,10 @@ function App() {
             <main>
               <ErrorBoundary>
                 <Routes>
+                  <Route path="/" element={<StaffDashboard />} />
                   <Route path="/staff" element={<StaffDashboard />} />
-                  <Route path="/ebooks" element={<EBookReader />} />
-                  <Route path="*" element={<Navigate to="/staff" replace />} />
+                  <Route path="/ebooks" element={<EBookReader isStaff={true} />} />
+                  <Route path="*" element={<Navigate to="/staff?tab=portal" replace />} />
                 </Routes>
               </ErrorBoundary>
             </main>
@@ -663,7 +692,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/qr-system" element={<QRSystem />} />
-                <Route path="/ebooks" element={<EBookReader />} />
+                <Route path="/ebooks" element={<EBookReader isStaff={false} />} />
                 <Route path="/lost-found" element={<LostFound />} />
                 {/* Customer tidak bisa akses staff */}
                 <Route path="/staff" element={<Navigate to="/" replace />} />

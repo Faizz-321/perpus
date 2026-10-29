@@ -26,6 +26,7 @@ app.use('/original/Monograf', express.static(path.join(__dirname, '../original/M
 app.use('/original', express.static(path.join(__dirname, '../original')));
 app.use('/covers', express.static(path.join(__dirname, '../original/Monograf')));
 app.use('/covers', express.static(COVERS_DIR));
+app.use('/ebooks', express.static(path.join(__dirname, '../public/ebooks')));
 
 // Helper simpan Base64 gambar ke file fisik di folder public/covers
 function saveBase64Image(base64Data) {
@@ -315,9 +316,10 @@ function setupAllTables() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
-  // 6. Inisialisasi tabel lost_found & kolom ekstra
+  // 6. Inisialisasi tabel lost_found, kolom ekstra, & log pembaca ebook
   initLostFoundTable();
   initBooksExtraColumns();
+  initEbookReadsTable();
 }
 
 // Tambah kolom penerbit & tahun terbit pada tabel books (untuk fitur import massal)
@@ -367,6 +369,88 @@ function initLostFoundTable() {
             s
           );
         });
+      }
+    });
+  });
+}
+
+// Inisialisasi tabel log pembaca e-book & data sampel rekapitulasi
+let memoryEbookReads = [];
+
+function initEbookReadsTable() {
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS ebook_reads (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      ebook_id VARCHAR(100) NOT NULL,
+      title VARCHAR(500) NOT NULL,
+      category VARCHAR(100) DEFAULT 'Koleksi Umum',
+      reader_session VARCHAR(100) NULL,
+      read_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_read_at (read_at),
+      INDEX idx_ebook (ebook_id),
+      INDEX idx_category (category)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `, () => {
+    pool.query('SELECT COUNT(*) as count FROM ebook_reads', (err, rows) => {
+      if (!err && rows && rows[0].count === 0) {
+        console.log('🌱 Mengisi data sampel pembaca e-book untuk rekapitulasi staf...');
+        const sampleReads = [
+          // Hari ini (28 Okt 2026)
+          ['1yzQux9HBstAI_mDl0kZxyayM9MH1VZ6L', '099_Burung_Kecil_di_Pegunungan_Besar', 'BACAAN ANAK', '2026-10-28 08:35:10'],
+          ['ebk_02', 'Atomic Habits - Perubahan Kecil Hasil Luar Biasa', 'INSPIRASI', '2026-10-28 09:12:45'],
+          ['ebk_03', 'Biografi B.J. Habibie : Kisah Pengabdian Teknokrat', 'BIOGRAFI', '2026-10-28 09:50:20'],
+          ['ebk_04', 'Negeri 5 Menara - A. Fuadi', 'NOVEL', '2026-10-28 10:15:33'],
+          ['ebk_05', 'Tips & Trik Pemrograman Modern', 'TIPS & TRIK', '2026-10-28 10:45:00'],
+          ['ebk_06', 'Laskar Pelangi - Andrea Hirata', 'NOVEL', '2026-10-28 11:20:18'],
+          ['ebk_07', 'Sapiens : Riwayat Singkat Umat Manusia', 'INSPIRASI', '2026-10-28 13:10:05'],
+          ['ebk_08', 'Kisah 25 Nabi dan Rasul untuk Anak', 'BACAAN ANAK', '2026-10-28 14:05:40'],
+          ['ebk_04', 'Negeri 5 Menara - A. Fuadi', 'NOVEL', '2026-10-28 14:40:12'],
+          ['ebk_02', 'Atomic Habits - Perubahan Kecil Hasil Luar Biasa', 'INSPIRASI', '2026-10-28 15:15:50'],
+
+          // Kemarin & Hari-hari sebelumnya di Oktober 2026
+          ['ebk_06', 'Laskar Pelangi - Andrea Hirata', 'NOVEL', '2026-10-27 09:20:00'],
+          ['ebk_03', 'Biografi B.J. Habibie : Kisah Pengabdian Teknokrat', 'BIOGRAFI', '2026-10-27 10:30:15'],
+          ['ebk_02', 'Atomic Habits - Perubahan Kecil Hasil Luar Biasa', 'INSPIRASI', '2026-10-27 13:45:00'],
+          ['ebk_09', 'Filosofi Teras - Henry Manampiring', 'INSPIRASI', '2026-10-26 08:45:10'],
+          ['ebk_04', 'Negeri 5 Menara - A. Fuadi', 'NOVEL', '2026-10-26 11:15:00'],
+          ['ebk_01', '099_Burung_Kecil_di_Pegunungan_Besar', 'BACAAN ANAK', '2026-10-25 14:20:30'],
+          ['ebk_02', 'Atomic Habits - Perubahan Kecil Hasil Luar Biasa', 'INSPIRASI', '2026-10-24 10:10:10'],
+          ['ebk_10', 'Bumi Manusia - Pramoedya Ananta Toer', 'NOVEL', '2026-10-24 15:30:00'],
+          ['ebk_03', 'Biografi B.J. Habibie : Kisah Pengabdian Teknokrat', 'BIOGRAFI', '2026-10-23 09:40:00'],
+          ['ebk_05', 'Tips & Trik Pemrograman Modern', 'TIPS & TRIK', '2026-10-22 11:00:00'],
+          ['ebk_06', 'Laskar Pelangi - Andrea Hirata', 'NOVEL', '2026-10-22 14:10:20'],
+          ['ebk_02', 'Atomic Habits - Perubahan Kecil Hasil Luar Biasa', 'INSPIRASI', '2026-10-20 10:05:00'],
+          ['ebk_07', 'Sapiens : Riwayat Singkat Umat Manusia', 'INSPIRASI', '2026-10-18 13:20:00'],
+          ['ebk_04', 'Negeri 5 Menara - A. Fuadi', 'NOVEL', '2026-10-15 09:30:00'],
+          ['ebk_01', '099_Burung_Kecil_di_Pegunungan_Besar', 'BACAAN ANAK', '2026-10-12 11:45:00'],
+          ['ebk_03', 'Biografi B.J. Habibie : Kisah Pengabdian Teknokrat', 'BIOGRAFI', '2026-10-08 14:00:00'],
+          ['ebk_06', 'Laskar Pelangi - Andrea Hirata', 'NOVEL', '2026-10-05 10:20:00'],
+          ['ebk_02', 'Atomic Habits - Perubahan Kecil Hasil Luar Biasa', 'INSPIRASI', '2026-10-02 09:15:00'],
+
+          // Bulan-bulan sebelumnya di tahun 2026
+          ['ebk_06', 'Laskar Pelangi - Andrea Hirata', 'NOVEL', '2026-09-25 10:00:00'],
+          ['ebk_02', 'Atomic Habits - Perubahan Kecil Hasil Luar Biasa', 'INSPIRASI', '2026-09-18 14:30:00'],
+          ['ebk_03', 'Biografi B.J. Habibie : Kisah Pengabdian Teknokrat', 'BIOGRAFI', '2026-09-10 11:15:00'],
+          ['ebk_04', 'Negeri 5 Menara - A. Fuadi', 'NOVEL', '2026-08-28 09:40:00'],
+          ['ebk_01', '099_Burung_Kecil_di_Pegunungan_Besar', 'BACAAN ANAK', '2026-08-15 13:20:00'],
+          ['ebk_07', 'Sapiens : Riwayat Singkat Umat Manusia', 'INSPIRASI', '2026-08-04 15:00:00'],
+          ['ebk_06', 'Laskar Pelangi - Andrea Hirata', 'NOVEL', '2026-07-20 10:30:00'],
+          ['ebk_02', 'Atomic Habits - Perubahan Kecil Hasil Luar Biasa', 'INSPIRASI', '2026-07-11 11:45:00'],
+          ['ebk_03', 'Biografi B.J. Habibie : Kisah Pengabdian Teknokrat', 'BIOGRAFI', '2026-06-18 14:15:00'],
+          ['ebk_04', 'Negeri 5 Menara - A. Fuadi', 'NOVEL', '2026-05-22 09:10:00'],
+          ['ebk_05', 'Tips & Trik Pemrograman Modern', 'TIPS & TRIK', '2026-04-14 13:50:00'],
+          ['ebk_02', 'Atomic Habits - Perubahan Kecil Hasil Luar Biasa', 'INSPIRASI', '2026-03-19 10:25:00'],
+          ['ebk_06', 'Laskar Pelangi - Andrea Hirata', 'NOVEL', '2026-02-12 11:30:00'],
+          ['ebk_03', 'Biografi B.J. Habibie : Kisah Pengabdian Teknokrat', 'BIOGRAFI', '2026-01-20 14:40:00']
+        ];
+
+        sampleReads.forEach(s => {
+          pool.query(
+            'INSERT INTO ebook_reads (ebook_id, title, category, read_at) VALUES (?, ?, ?, ?)',
+            s
+          );
+        });
+        console.log(`✅ ${sampleReads.length} log pembaca e-book contoh berhasil diisi.`);
       }
     });
   });
@@ -711,8 +795,8 @@ app.get('/api/books', checkDb, (req, res) => {
       console.error('Error GET /api/books:', err);
       return res.status(500).json({ error: 'Gagal mengambil katalog buku', detail: err.message });
     }
-    // Set cache header untuk performa
-    res.set('Cache-Control', 'public, max-age=60');
+    // Nonaktifkan cache browser agar perubahan data, penambahan, dan penghapusan buku seketika ter-update
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.json(results);
   });
 });
@@ -843,20 +927,40 @@ app.put('/api/books/:id', checkDb, (req, res) => {
   });
 });
 
-// Hapus Buku dari Katalog oleh Staf
-app.delete('/api/books/:id', checkDb, (req, res) => {
-  const { id } = req.params;
-  pool.query('DELETE FROM books WHERE id = ?', [id], (err, result) => {
-    if (err) {
-      console.error('Error DELETE /api/books/:id:', err);
-      return res.status(500).json({ error: 'Gagal menghapus buku dari katalog', detail: err.message });
+// Hapus Buku Fisik dari Katalog oleh Staf (Mendukung method DELETE & POST /delete untuk kehandalan proxy/tunnel)
+const handleDeleteBookHandler = (req, res) => {
+  const id = req.params.id || req.body?.id;
+  if (!id) {
+    return res.status(400).json({ error: 'ID buku wajib disertakan' });
+  }
+
+  console.log(`[DELETE /api/books] Permintaan hapus buku ID: ${id}`);
+
+  // 1. Bersihkan rating & ulasan buku terlebih dahulu jika ada
+  pool.query('DELETE FROM book_ratings WHERE book_id = ?', [id], (ratingErr) => {
+    if (ratingErr) {
+      console.warn(`[DELETE /api/books] Catatan: Rating buku ${id} tidak ada atau gagal dibersihkan:`, ratingErr.message);
     }
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Buku tidak ditemukan' });
-    }
-    res.json({ message: 'Buku berhasil dihapus dari katalog!', id });
+
+    // 2. Hapus data buku dari tabel books
+    pool.query('DELETE FROM books WHERE id = ?', [id], (err, result) => {
+      if (err) {
+        console.error(`[DELETE /api/books] Error menghapus buku ID ${id}:`, err);
+        return res.status(500).json({ error: 'Gagal menghapus buku dari database', detail: err.message });
+      }
+
+      console.log(`[DELETE /api/books] Hasil hapus ID ${id}: affectedRows = ${result.affectedRows}`);
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'Buku tidak ditemukan di database (kemungkinan sudah dihapus sebelumnya)' });
+      }
+
+      res.json({ success: true, message: 'Buku berhasil dihapus dari katalog!', id });
+    });
   });
-});
+};
+
+app.delete('/api/books/:id', checkDb, handleDeleteBookHandler);
+app.post('/api/books/:id/delete', checkDb, handleDeleteBookHandler);
 
 // Cari Foto Sampul Otomatis dari Internet (Open Library API)
 app.post('/api/books/search-cover', async (req, res) => {
@@ -1544,6 +1648,261 @@ app.get('/api/ebooks', (req, res) => {
     console.error('Error GET /api/ebooks:', err);
     res.status(500).json({ error: 'Gagal memuat katalog e-book' });
   }
+});
+
+// Tambah E-Book Baru ke Katalog Perpustakaan oleh Staf
+app.post('/api/ebooks', (req, res) => {
+  try {
+    const { title, category, drive_url, pdf_data, pdf_filename, cover_image, cover_url } = req.body;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Judul e-book wajib diisi' });
+    }
+
+    const ebooksPath = path.join(__dirname, '../src/data/ebooksData.json');
+    let list = [];
+    if (fs.existsSync(ebooksPath)) {
+      list = JSON.parse(fs.readFileSync(ebooksPath, 'utf8'));
+    }
+
+    // 1. Ekstrak Google Drive ID jika staf memasukkan link Google Drive
+    let driveId = null;
+    let driveViewUrl = null;
+    let drivePreviewUrl = null;
+    let driveDownloadUrl = null;
+
+    if (drive_url && typeof drive_url === 'string') {
+      const match = drive_url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || drive_url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      if (match && match[1]) {
+        driveId = match[1];
+      } else if (!drive_url.startsWith('http') && drive_url.length > 15) {
+        driveId = drive_url.trim();
+      }
+    }
+
+    // Buat ID unik e-book
+    const newId = driveId || `ebk_${Date.now()}_${Math.floor(100 + Math.random() * 900)}`;
+
+    if (driveId) {
+      driveViewUrl = `https://drive.google.com/file/d/${driveId}/view`;
+      drivePreviewUrl = `https://drive.google.com/file/d/${driveId}/preview`;
+      driveDownloadUrl = `https://drive.google.com/uc?export=download&id=${driveId}`;
+    }
+
+    // 2. Simpan file PDF fisik jika di-upload dalam base64
+    let localPdfUrl = null;
+    if (pdf_data && typeof pdf_data === 'string' && pdf_data.startsWith('data:application/pdf;base64,')) {
+      const pdfBuffer = Buffer.from(pdf_data.replace('data:application/pdf;base64,', ''), 'base64');
+      const pdfDir = path.join(__dirname, '../public/ebooks');
+      if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
+      const safeName = (pdf_filename || `ebook_${Date.now()}.pdf`).replace(/[^a-zA-Z0-9_.-]/g, '_');
+      fs.writeFileSync(path.join(pdfDir, safeName), pdfBuffer);
+      localPdfUrl = `/ebooks/${safeName}`;
+    }
+
+    // 3. Simpan foto sampul jika ada
+    let finalThumbnail = cover_url || null;
+    if (cover_image && typeof cover_image === 'string' && cover_image.startsWith('data:image')) {
+      finalThumbnail = saveBase64Image(cover_image);
+    } else if (!finalThumbnail && driveId) {
+      finalThumbnail = `https://lh3.googleusercontent.com/d/${driveId}=w400`;
+    }
+
+    const newBook = {
+      id: newId,
+      title: title.trim(),
+      rawTitle: (pdf_filename || title.trim()) + '.pdf',
+      category: category ? category.trim() : 'Koleksi Umum',
+      thumbnail: finalThumbnail || '/logo-perpus.png',
+      driveViewUrl: driveViewUrl || localPdfUrl || drive_url || '',
+      drivePreviewUrl: drivePreviewUrl || localPdfUrl || drive_url || '',
+      driveDownloadUrl: driveDownloadUrl || localPdfUrl || '',
+      pdfUrl: localPdfUrl || null,
+      hasCover: Boolean(finalThumbnail),
+      created_at: new Date().toISOString()
+    };
+
+    list.unshift(newBook);
+    fs.writeFileSync(ebooksPath, JSON.stringify(list, null, 2), 'utf8');
+
+    console.log(`[POST /api/ebooks] Staf berhasil menambahkan e-book: "${newBook.title}" (ID: ${newBook.id}). Total: ${list.length}`);
+    res.json({
+      success: true,
+      message: `E-book "${newBook.title}" berhasil ditambahkan ke katalog perpustakaan!`,
+      data: newBook,
+      totalCount: list.length
+    });
+  } catch (err) {
+    console.error('Error POST /api/ebooks:', err);
+    res.status(500).json({ error: 'Gagal menyimpan e-book baru', detail: err.message });
+  }
+});
+
+// Hapus e-book dari katalog perpustakaan oleh staf (Mendukung DELETE & POST /delete)
+const handleDeleteEbookHandler = (req, res) => {
+  try {
+    const id = req.params.id || req.body?.id;
+    if (!id) {
+      return res.status(400).json({ error: 'ID e-book wajib disertakan' });
+    }
+    const ebooksPath = path.join(__dirname, '../src/data/ebooksData.json');
+    if (!fs.existsSync(ebooksPath)) {
+      return res.status(404).json({ error: 'Data e-book tidak ditemukan' });
+    }
+    const raw = fs.readFileSync(ebooksPath, 'utf8');
+    const list = JSON.parse(raw);
+    const targetBook = list.find(b => b.id === id);
+    if (!targetBook) {
+      return res.status(404).json({ error: 'E-book dengan ID tersebut tidak ditemukan' });
+    }
+    const filtered = list.filter(b => b.id !== id);
+    fs.writeFileSync(ebooksPath, JSON.stringify(filtered, null, 2), 'utf8');
+    console.log(`[DELETE /api/ebooks] Staf menghapus e-book: "${targetBook.title}" (ID: ${id}). Sisa koleksi: ${filtered.length}`);
+    res.json({
+      success: true,
+      message: `E-book "${targetBook.title}" berhasil dihapus dari katalog perpustakaan`,
+      deletedBook: targetBook,
+      remainingCount: filtered.length
+    });
+  } catch (err) {
+    console.error('Error DELETE /api/ebooks/:id:', err);
+    res.status(500).json({ error: 'Gagal menghapus e-book dari server', detail: err.message });
+  }
+};
+
+app.delete('/api/ebooks/:id', handleDeleteEbookHandler);
+app.post('/api/ebooks/:id/delete', handleDeleteEbookHandler);
+
+// ------------------------------------------
+// FITUR REKAPITULASI PEMBACA E-BOOK & PESANAN
+// ------------------------------------------
+
+// Catat log pembaca e-book saat pengunjung membuka bacaan
+app.post('/api/ebooks/read-log', (req, res) => {
+  const { ebook_id, title, category, reader_session } = req.body;
+  if (!ebook_id || !title) {
+    return res.status(400).json({ error: 'ebook_id dan title wajib diisi' });
+  }
+
+  const cleanCategory = category || 'Koleksi Umum';
+  const sessionToken = reader_session || null;
+  const now = new Date();
+
+  const newRead = {
+    id: Date.now(),
+    ebook_id,
+    title,
+    category: cleanCategory,
+    reader_session: sessionToken,
+    read_at: now.toISOString()
+  };
+  memoryEbookReads.unshift(newRead);
+  if (memoryEbookReads.length > 500) memoryEbookReads.pop();
+
+  if (!pool || !isDbConnected) {
+    return res.status(201).json({ message: 'Log pembaca disimpan (offline mode)', data: newRead });
+  }
+
+  pool.query(
+    'INSERT INTO ebook_reads (ebook_id, title, category, reader_session, read_at) VALUES (?, ?, ?, ?, NOW())',
+    [ebook_id, title, cleanCategory, sessionToken],
+    (err, result) => {
+      if (err) {
+        console.warn('⚠️ Gagal simpan log pembaca ke MySQL:', err.message);
+        return res.status(201).json({ message: 'Log tersimpan di memori', data: newRead });
+      }
+      res.status(201).json({ message: 'Log pembaca berhasil dicatat', id: result.insertId });
+    }
+  );
+});
+
+// Ambil seluruh log pembaca e-book untuk rekap staf
+app.get('/api/ebooks/read-log', (req, res) => {
+  if (!pool || !isDbConnected) {
+    return res.json(memoryEbookReads);
+  }
+
+  const query = 'SELECT * FROM ebook_reads ORDER BY read_at DESC LIMIT 1000';
+  pool.query(query, (err, rows) => {
+    if (err) {
+      console.warn('Gagal ambil log pembaca dari MySQL:', err.message);
+      return res.json(memoryEbookReads);
+    }
+    res.json(rows);
+  });
+});
+
+// Endpoint terpadu rekapitulasi pelayanan (Harian, Bulanan, Tahunan)
+app.get('/api/rekap/summary', (req, res) => {
+  const { period = 'daily', date, month, year } = req.query;
+
+  let ordersDateFilter = '1=1';
+  let ebookDateFilter = '1=1';
+  const ordersParams = [];
+  const ebookParams = [];
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const targetDate = date || todayStr;
+  const currentMonthStr = todayStr.slice(0, 7);
+  const targetMonth = month || currentMonthStr;
+  const currentYearStr = todayStr.slice(0, 4);
+  const targetYear = year || currentYearStr;
+
+  if (period === 'daily') {
+    ordersDateFilter = 'DATE(created_at) = ?';
+    ordersParams.push(targetDate);
+    ebookDateFilter = 'DATE(read_at) = ?';
+    ebookParams.push(targetDate);
+  } else if (period === 'monthly') {
+    ordersDateFilter = "DATE_FORMAT(created_at, '%Y-%m') = ?";
+    ordersParams.push(targetMonth);
+    ebookDateFilter = "DATE_FORMAT(read_at, '%Y-%m') = ?";
+    ebookParams.push(targetMonth);
+  } else if (period === 'yearly') {
+    ordersDateFilter = 'YEAR(created_at) = ?';
+    ordersParams.push(targetYear);
+    ebookDateFilter = 'YEAR(read_at) = ?';
+    ebookParams.push(targetYear);
+  }
+
+  if (!pool || !isDbConnected) {
+    return res.json({
+      period,
+      targetDate,
+      targetMonth,
+      targetYear,
+      orders: [],
+      ebookReads: memoryEbookReads,
+      isOffline: true
+    });
+  }
+
+  const ordersSql = `SELECT id, ticket_code, book_title, table_no, status, created_at, updated_at FROM orders WHERE ${ordersDateFilter} ORDER BY created_at DESC`;
+  const ebookSql = `SELECT id, ebook_id, title, category, read_at FROM ebook_reads WHERE ${ebookDateFilter} ORDER BY read_at DESC`;
+
+  pool.query(ordersSql, ordersParams, (errOrders, ordersRows = []) => {
+    if (errOrders) {
+      console.warn('Gagal query rekap orders:', errOrders.message);
+      ordersRows = [];
+    }
+
+    pool.query(ebookSql, ebookParams, (errEbook, ebookRows = []) => {
+      if (errEbook) {
+        console.warn('Gagal query rekap ebook_reads:', errEbook.message);
+        ebookRows = memoryEbookReads;
+      }
+
+      res.json({
+        period,
+        targetDate,
+        targetMonth,
+        targetYear,
+        orders: ordersRows,
+        ebookReads: ebookRows,
+        totalOrdersCount: ordersRows.length,
+        totalEbookReadsCount: ebookRows.length
+      });
+    });
+  });
 });
 
 

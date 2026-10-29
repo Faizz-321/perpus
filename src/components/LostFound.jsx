@@ -521,7 +521,7 @@ function LostFound() {
 
                     {item.status === 'claimed' ? (
                       <div style={{ color: 'var(--success)', fontWeight: '600' }}>
-                        ✓ Diambil oleh: <strong>{item.claimed_by || 'Pemilik Sah'}</strong> ({formatDateTime(item.claimed_at)})
+                        Diambil oleh: <strong>{item.claimed_by || 'Pemilik Sah'}</strong> ({formatDateTime(item.claimed_at)})
                       </div>
                     ) : item.type === 'lost' ? (
                       <div style={{ color: '#93c5fd', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -529,7 +529,7 @@ function LostFound() {
                       </div>
                     ) : (
                       <div style={{ color: '#a5b4fc', fontWeight: '600' }}>
-                        👉 Silakan datangi Meja Staf untuk serah terima
+                        Silakan datangi Meja Staf untuk serah terima
                       </div>
                     )}
                   </div>

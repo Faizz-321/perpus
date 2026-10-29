@@ -155,7 +155,7 @@ function LoginPage({ onLogin }) {
                   <input type={showPin ? 'text' : 'password'} className="form-control" placeholder="Masukkan PIN staf..." value={pin} onChange={e => { setPin(e.target.value); setError(''); }} maxLength={8} autoFocus style={{ paddingRight: '2.8rem', letterSpacing: '0.2em', fontSize: '1.1rem' }} />
                   <button type="button" onClick={() => setShowPin(!showPin)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>{showPin ? <EyeOff size={18} /> : <Eye size={18} />}</button>
                 </div>
-                {error && <p style={{ color: '#f87171', fontSize: '0.83rem', marginTop: '0.5rem' }}>⚠️ {error}</p>}
+                {error && <p style={{ color: '#f87171', fontSize: '0.83rem', marginTop: '0.5rem' }}>{error}</p>}
               </div>
 
               <button type="submit" className="btn" disabled={!pin || loading} style={{ width: '100%', background: 'linear-gradient(135deg, #059669, #10b981)', border: 'none', color: '#fff', fontWeight: '700', padding: '0.75rem', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: (!pin || loading) ? 0.6 : 1, cursor: (!pin || loading) ? 'not-allowed' : 'pointer' }}>
@@ -168,7 +168,7 @@ function LoginPage({ onLogin }) {
             </form>
 
             <div style={{ marginTop: '1rem', padding: '0.7rem', borderRadius: '8px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-              💡 PIN default: <strong style={{ color: 'var(--primary-color)' }}>1234</strong>
+              PIN default: <strong style={{ color: 'var(--primary-color)' }}>1234</strong>
             </div>
           </div>
         )}

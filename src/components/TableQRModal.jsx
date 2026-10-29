@@ -396,7 +396,7 @@ export default function TableQRModal({ isOpen, onClose }) {
               <Globe size={15} color="#10b981" />
               <span>Tautan Domain Aktif:</span>
               <span className={`table-qr-tunnel-badge ${tunnelBadge.type}`}>
-                ⚡ {tunnelBadge.label}
+                {tunnelBadge.label}
               </span>
             </div>
 
@@ -605,7 +605,7 @@ export default function TableQRModal({ isOpen, onClose }) {
         {/* Footer Petunjuk */}
         <div className="table-qr-modal-footer no-print">
           <div style={{ fontSize: '0.82rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: '#10b981', fontWeight: '700' }}>✨ Siap Cetak:</span>
+            <span style={{ color: '#10b981', fontWeight: '700' }}>Siap Cetak:</span>
             <span>Tombol <strong>Unduh Stiker Lengkap</strong> akan mengunduh gambar utuh kartu meja (dengan 3 Logo resmi, Nomor Meja, Barcode, dan Petunjuk).</span>
           </div>
           <button 
