@@ -201,10 +201,15 @@ async function generateFullStickerDataUrl(table, qrDataUrl, baseUrl) {
 
 export default function TableQRModal({ isOpen, onClose }) {
   const [baseUrl, setBaseUrl] = useState(() => {
+    const defaultSite = import.meta.env.VITE_SITE_URL || 'https://perpusverse.ilkomith.web.id';
     if (typeof window !== 'undefined') {
+      const host = window.location.hostname;
+      if (host === 'localhost' || host === '127.0.0.1') {
+        return defaultSite;
+      }
       return window.location.origin;
     }
-    return 'http://localhost:5173';
+    return defaultSite;
   });
 
   const [selectedTableFilter, setSelectedTableFilter] = useState('ALL');
@@ -216,7 +221,7 @@ export default function TableQRModal({ isOpen, onClose }) {
   // Deteksi jenis tunnel / URL yang sedang aktif
   const tunnelBadge = useMemo(() => {
     const url = (baseUrl || '').toLowerCase();
-    if (url.includes('trycloudflare.com')) {
+    if (url.includes('ilkomith.web.id') || url.includes('trycloudflare.com')) {
       return { label: 'Cloudflare Tunnel Aktif', type: 'cloudflare' };
     }
     if (url.includes('pinggy')) {

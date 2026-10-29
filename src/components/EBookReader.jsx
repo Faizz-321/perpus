@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useModal } from '../context/ModalContext';
 import ebooksData from '../data/ebooksData.json';
+import { API_URL, resolveMediaUrl } from '../config/api';
 
 const CATEGORY_COLORS = {
   'NOVEL': 'rgba(236, 72, 153, 0.25)',
@@ -58,7 +59,11 @@ function EBookCover({ book, onClick }) {
   // URL sampul: direct Google CDN dan local extracted covers (seperti sistem Lanjutkan Membaca)
   const candidateUrls = useMemo(() => {
     if (!book.id || !book.thumbnail) return [];
-    const list = [book.thumbnail];
+    const resolvedThumb = resolveMediaUrl(book.thumbnail);
+    const list = [resolvedThumb];
+    if (typeof book.thumbnail === 'string' && book.thumbnail !== resolvedThumb) {
+      list.push(book.thumbnail);
+    }
     if (typeof book.thumbnail === 'string' && book.thumbnail.includes('googleusercontent.com')) {
       list.push(`https://drive.google.com/thumbnail?id=${book.id}&sz=w400`);
     }
@@ -256,7 +261,7 @@ export default function EBookReader({ isStaff: isStaffProp }) {
 
   useEffect(() => {
     let isMounted = true;
-    fetch('/api/ebooks')
+    fetch(`${API_URL}/ebooks`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (isMounted && Array.isArray(data) && data.length > 0) {
@@ -395,7 +400,7 @@ export default function EBookReader({ isStaff: isStaffProp }) {
         cover_url: ebookForm.cover_url.trim()
       };
 
-      const res = await fetch('/api/ebooks', {
+      const res = await fetch(`${API_URL}/ebooks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -446,12 +451,12 @@ export default function EBookReader({ isStaff: isStaffProp }) {
 
     setDeletingId(book.id);
     try {
-      let res = await fetch(`/api/ebooks/${encodeURIComponent(book.id)}`, {
+      let res = await fetch(`${API_URL}/ebooks/${encodeURIComponent(book.id)}`, {
         method: 'DELETE'
       });
       // Fallback otomatis ke POST /api/ebooks/:id/delete jika HTTP DELETE dibatasi
       if (!res.ok) {
-        res = await fetch(`/api/ebooks/${encodeURIComponent(book.id)}/delete`, {
+        res = await fetch(`${API_URL}/ebooks/${encodeURIComponent(book.id)}/delete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: book.id })
@@ -507,7 +512,7 @@ export default function EBookReader({ isStaff: isStaffProp }) {
 
       // Catat log pembaca e-book ke backend untuk statistik rekapitulasi staf
       try {
-        fetch('/api/ebooks/read-log', {
+        fetch(`${API_URL}/ebooks/read-log`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -525,7 +530,7 @@ export default function EBookReader({ isStaff: isStaffProp }) {
     if (!activeBook) return '';
     // Jika file PDF lokal hasil upload staf
     if (activeBook.pdfUrl) {
-      return activeBook.pdfUrl;
+      return resolveMediaUrl(activeBook.pdfUrl);
     }
     // Jika ada Google Drive Preview URL
     if (activeBook.drivePreviewUrl) {
@@ -815,7 +820,7 @@ export default function EBookReader({ isStaff: isStaffProp }) {
             }}>
               {lastReadBooks.map(book => {
                 const thumbUrl = book.thumbnail 
-                  ? book.thumbnail.replace(/=s\d+$/, '=s200')
+                  ? resolveMediaUrl(book.thumbnail.replace(/=s\d+$/, '=s200'))
                   : `https://lh3.googleusercontent.com/d/${book.id}=w200`;
 
                 return (

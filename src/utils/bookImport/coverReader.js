@@ -6,10 +6,11 @@
 import { createWorker } from 'tesseract.js';
 import { enhanceForOcr } from './pdfReader';
 import { bestScoreForCover } from './coverMatcher';
+import { API_URL } from '../../config/api';
 
 export async function getAiStatus() {
   try {
-    const res = await fetch('/api/books/import/ai-status');
+    const res = await fetch(`${API_URL}/books/import/ai-status`);
     if (!res.ok) return { gemini: false };
     return await res.json();
   } catch {
@@ -18,7 +19,7 @@ export async function getAiStatus() {
 }
 
 async function readWithGemini(dataUrl) {
-  const res = await fetch('/api/books/import/read-cover', {
+  const res = await fetch(`${API_URL}/books/import/read-cover`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ image: dataUrl })

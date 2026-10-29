@@ -1,5 +1,6 @@
 // Utility Pengumuman Suara & Bel Panggilan untuk Perpustakaan Umum Kota Parepare
 // Menggunakan Web Audio API (Nada Ding-Dong) + Native Indonesian Voice Audio (Google TTS)
+import { API_URL } from '../config/api';
 
 /**
  * Memainkan nada bel 2-nada "Ting-Tung" / Chime khas pengumuman resmi perpustakaan / bandara
@@ -243,7 +244,7 @@ export function speakIndonesian(text, muted = false) {
     stopCurrentAnnouncement();
 
     // 1. Coba putar audio asli Bahasa Indonesia dari endpoint backend
-    const audioUrl = `/api/tts?text=${encodeURIComponent(text)}`;
+    const audioUrl = `${API_URL}/tts?text=${encodeURIComponent(text)}`;
     const audio = new Audio(audioUrl);
     if (muted) {
       audio.muted = true;

@@ -8,6 +8,7 @@ import { useModal } from '../context/ModalContext';
 import { extractBookList, renderCoverPages } from '../utils/bookImport/pdfReader';
 import { readAllCovers, getAiStatus } from '../utils/bookImport/coverReader';
 import { matchBooksToCovers, matchByOrder, normalizeText, CONFIDENCE } from '../utils/bookImport/coverMatcher';
+import { API_URL, resolveMediaUrl } from '../config/api';
 import './BulkBookImport.css';
 
 const IMPORT_STEPS = [
@@ -196,7 +197,7 @@ function BulkBookImport() {
       // 4. Cek duplikat dengan katalog
       let existing = new Set();
       try {
-        const res = await fetch('/api/books');
+        const res = await fetch(`${API_URL}/books`);
         if (res.ok) {
           const books = await res.json();
           existing = new Set(books.map((b) => normalizeText(b.title)));
@@ -312,7 +313,7 @@ function BulkBookImport() {
     try {
       for (let i = 0; i < toSave.length; i += SAVE_CHUNK) {
         const chunk = toSave.slice(i, i + SAVE_CHUNK);
-        const res = await fetch('/api/books/bulk-import', {
+        const res = await fetch(`${API_URL}/books/bulk-import`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -857,7 +858,7 @@ function BulkBookImport() {
           <div className="bbi-done-list">
             {saveResult.saved.slice(0, 24).map((s) => (
               <div key={s.id} className="bbi-done-item">
-                {s.cover_url ? <img src={s.cover_url} alt={s.title} /> : <div className="bbi-no-cover small"><ImageIcon size={18} /></div>}
+                {s.cover_url ? <img src={resolveMediaUrl(s.cover_url)} alt={s.title} /> : <div className="bbi-no-cover small"><ImageIcon size={18} /></div>}
                 <span>{s.title}</span>
               </div>
             ))}

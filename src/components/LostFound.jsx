@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Package, Search, Plus, CheckCircle2, Clock, MapPin, AlertCircle, ShieldCheck, Phone, HelpCircle, Database, Check } from 'lucide-react';
 import { useModal } from '../context/ModalContext';
+import { API_URL } from '../config/api';
 
 function LostFound() {
   const { showAlert } = useModal();
@@ -28,7 +29,7 @@ function LostFound() {
 
   const fetchItems = async () => {
     try {
-      const res = await fetch('/api/lost-found');
+      const res = await fetch(`${API_URL}/lost-found`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -136,7 +137,7 @@ function LostFound() {
     }
 
     try {
-      const res = await fetch('/api/lost-found', {
+      const res = await fetch(`${API_URL}/lost-found`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

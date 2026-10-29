@@ -4,6 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/server-manager.ps1 -Action start",
+    "stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/server-manager.ps1 -Action stop",
+    "status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/server-manager.ps1 -Action status",
+    "autostart": "install-autostart.bat",
     "dev": "vite --host",
     "build": "vite build",
     "lint": "oxlint",

@@ -13,6 +13,7 @@ import EBookReader from './components/EBookReader';
 import { ModalProvider, useModal } from './context/ModalContext';
 import { playNewOrderAlarm } from './utils/soundAnnouncement';
 import { formatOrderBookTitles } from './utils/orderBooks';
+import { API_URL } from './config/api';
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -165,7 +166,7 @@ function StaffNav({ onLogout, notifCount }) {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch('/api/notifications');
+      const res = await fetch(`${API_URL}/notifications`);
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data) ? data : [];

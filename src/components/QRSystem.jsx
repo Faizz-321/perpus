@@ -7,6 +7,7 @@ import { requestBrowserNotificationPermission, sendBrowserNotification } from '.
 import { useModal } from '../context/ModalContext';
 import { parseOrderBookTitles, serializeOrderBookTitles } from '../utils/orderBooks';
 import { normalizeTableParam, ALL_LIBRARY_TABLES } from '../utils/tableUtils';
+import { API_URL, resolveMediaUrl } from '../config/api';
 
 // Kunci penyimpanan localStorage
 const ORDER_HISTORY_KEY = 'bibliotech_order_history';
@@ -255,7 +256,7 @@ function QRSystem() {
   // Ambil 260+ buku inventaris dari database MySQL
   useEffect(() => {
     setLoadingBooks(true);
-    fetch('/api/books')
+    fetch(`${API_URL}/books`)
       .then((res) => {
         if (!res.ok) throw new Error('Gagal mengambil katalog');
         return res.json();
@@ -290,7 +291,7 @@ function QRSystem() {
 
     const checkStatus = async () => {
       try {
-        const res = await fetch(`/api/orders/${activeOrder.id}`);
+        const res = await fetch(`${API_URL}/orders/${activeOrder.id}`);
         if (res.ok) {
           const data = await res.json();
           const callCount = Number(data.call_count || 0);
@@ -388,7 +389,7 @@ function QRSystem() {
 
     const notifyLeave = () => {
       try {
-        const url = `/api/orders/${activeOrder.id}/leave`;
+        const url = `${API_URL}/orders/${activeOrder.id}/leave`;
         if (navigator.sendBeacon) {
           navigator.sendBeacon(url);
         } else {
@@ -517,7 +518,7 @@ function QRSystem() {
     const combinedTitles = serializeOrderBookTitles(selectedBooks);
 
     try {
-      const res = await fetch('/api/orders', {
+      const res = await fetch(`${API_URL}/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -580,7 +581,7 @@ function QRSystem() {
     if (!confirmed) return;
 
     try {
-      await fetch(`/api/orders/${activeOrder.id}`, {
+      await fetch(`${API_URL}/orders/${activeOrder.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'cancelled' }),
@@ -635,7 +636,7 @@ function QRSystem() {
     setIsConfirmingReceived(true);
     try {
       if (activeOrder.status !== 'completed') {
-        await fetch(`/api/orders/${activeOrder.id}`, {
+        await fetch(`${API_URL}/orders/${activeOrder.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'completed' }),
@@ -683,7 +684,7 @@ function QRSystem() {
     try {
       let res;
       if (rateModalBook.id) {
-        res = await fetch(`/api/books/${rateModalBook.id}/rate`, {
+        res = await fetch(`${API_URL}/books/${rateModalBook.id}/rate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -693,7 +694,7 @@ function QRSystem() {
           })
         });
       } else {
-        res = await fetch('/api/books/rate-by-title', {
+        res = await fetch(`${API_URL}/books/rate-by-title`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1492,7 +1493,7 @@ function QRSystem() {
                     {book.cover_url ? (
                       <div className="book-cover-wrapper" style={{ padding: 0, overflow: 'hidden', border: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column' }}>
                         <img 
-                          src={book.cover_url} 
+                          src={resolveMediaUrl(book.cover_url)} 
                           alt={`Sampul ${book.title}`} 
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                           onLoad={(e) => {

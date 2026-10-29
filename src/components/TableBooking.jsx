@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CalendarClock } from 'lucide-react';
 import { useModal } from '../context/ModalContext';
+import { API_URL } from '../config/api';
 
 function TableBooking() {
   const { showAlert } = useModal();
@@ -25,7 +26,7 @@ function TableBooking() {
     if (!selectedTable) return;
 
     try {
-      await fetch('/api/table-bookings', {
+      await fetch(`${API_URL}/table-bookings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

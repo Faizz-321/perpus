@@ -7,6 +7,7 @@ import {
   ChevronLeft, ChevronRight, Hash, PieChart, Ticket, FileSpreadsheet, Table
 } from 'lucide-react';
 import { parseOrderBookTitles } from '../utils/orderBooks';
+import { API_URL } from '../config/api';
 
 /**
  * Komponen Rekapitulasi Pelayanan Perpustakaan (Staf Dashboard)
@@ -56,8 +57,8 @@ export default function StaffRekap({ onBackToOrders }) {
     setLoading(true);
     try {
       const [resOrders, resEbooks] = await Promise.all([
-        fetch('/api/orders').then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch('/api/ebooks/read-log').then(r => r.ok ? r.json() : []).catch(() => [])
+        fetch(`${API_URL}/orders`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_URL}/ebooks/read-log`).then(r => r.ok ? r.json() : []).catch(() => [])
       ]);
       setOrders(Array.isArray(resOrders) ? resOrders : []);
       setEbookReads(Array.isArray(resEbooks) ? resEbooks : []);

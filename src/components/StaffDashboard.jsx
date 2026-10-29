@@ -16,6 +16,7 @@ import TableQRModal from './TableQRModal';
 import StaffRekap from './StaffRekap';
 import EBookReader from './EBookReader';
 import StaffHome from './StaffHome';
+import { API_URL, resolveMediaUrl } from '../config/api';
 
 function StaffDashboard() {
   const { showAlert, showConfirm } = useModal();
@@ -198,7 +199,7 @@ function StaffDashboard() {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/orders');
+      const response = await fetch(`${API_URL}/orders`);
       if (!response.ok) throw new Error('Gagal mengambil data dari server');
       const data = await response.json();
       
@@ -242,7 +243,7 @@ function StaffDashboard() {
   const fetchLostFound = async () => {
     setLoadingLf(true);
     try {
-      const res = await fetch('/api/lost-found');
+      const res = await fetch(`${API_URL}/lost-found`);
       if (res.ok) {
         const data = await res.json();
         setLfItems(data);
@@ -260,7 +261,7 @@ function StaffDashboard() {
   const fetchBooks = async () => {
     setLoadingBooks(true);
     try {
-      const res = await fetch(`/api/books?_t=${Date.now()}`);
+      const res = await fetch(`${API_URL}/books?_t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         setBookList(data);
@@ -353,7 +354,7 @@ function StaffDashboard() {
     setSearchingCover(true);
     setCoverCandidates([]);
     try {
-      const res = await fetch('/api/books/search-cover', {
+      const res = await fetch(`${API_URL}/books/search-cover`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: bookForm.title, author: bookForm.author })
@@ -400,7 +401,7 @@ function StaffDashboard() {
         cover_image: bookForm.cover_image || null
       };
 
-      const url = editingBook ? `/api/books/${editingBook.id}` : '/api/books';
+      const url = editingBook ? `${API_URL}/books/${editingBook.id}` : `${API_URL}/books`;
       const method = editingBook ? 'PUT' : 'POST';
 
       const res = await fetch(url, {
@@ -443,10 +444,10 @@ function StaffDashboard() {
     });
     if (!confirmed) return;
     try {
-      let res = await fetch(`/api/books/${encodeURIComponent(book.id)}`, { method: 'DELETE' });
+      let res = await fetch(`${API_URL}/books/${encodeURIComponent(book.id)}`, { method: 'DELETE' });
       // Fallback otomatis ke POST /api/books/:id/delete jika HTTP DELETE diblokir oleh proxy / Cloudflare Tunnel / WAF
       if (!res.ok) {
-        res = await fetch(`/api/books/${encodeURIComponent(book.id)}/delete`, {
+        res = await fetch(`${API_URL}/books/${encodeURIComponent(book.id)}/delete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: book.id })
@@ -485,7 +486,7 @@ function StaffDashboard() {
     window.dispatchEvent(new CustomEvent('perpus_order_status_changed', { detail: { id, newStatus } }));
 
     try {
-      await fetch(`/api/orders/${id}`, {
+      await fetch(`${API_URL}/orders/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
@@ -514,7 +515,7 @@ function StaffDashboard() {
 
     // Kirim sinyal panggil ulang ke backend agar HP pengunjung / TV Lobby berbunyi
     try {
-      await fetch(`/api/orders/${order.id}/call`, { method: 'POST' });
+      await fetch(`${API_URL}/orders/${order.id}/call`, { method: 'POST' });
     } catch (err) {
       console.warn('Gagal kirim panggil ulang ke backend:', err);
     }
@@ -543,7 +544,7 @@ function StaffDashboard() {
 
     setOrders((prev) => prev.filter((order) => order.id !== id));
     try {
-      await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+      await fetch(`${API_URL}/orders/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.error('Gagal menghapus pesanan:', err);
     }
@@ -569,7 +570,7 @@ function StaffDashboard() {
 
     setOrders((prev) => prev.filter((o) => o.status !== 'completed' && o.status !== 'cancelled'));
     try {
-      await fetch('/api/orders/cleanup/completed', { method: 'DELETE' });
+      await fetch(`${API_URL}/orders/cleanup/completed`, { method: 'DELETE' });
     } catch (err) {
       console.error('Gagal membersihkan riwayat pesanan:', err);
     }
@@ -589,7 +590,7 @@ function StaffDashboard() {
     }
 
     try {
-      const res = await fetch('/api/lost-found', {
+      const res = await fetch(`${API_URL}/lost-found`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -828,7 +829,7 @@ function StaffDashboard() {
   const executeSaveHandover = async () => {
     setIsSubmittingHandover(true);
     try {
-      const res = await fetch(`/api/lost-found/${handoverModalItem.id}/handover`, {
+      const res = await fetch(`${API_URL}/lost-found/${handoverModalItem.id}/handover`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -909,7 +910,7 @@ function StaffDashboard() {
     if (!confirmed) return;
 
     try {
-      await fetch(`/api/lost-found/${id}`, { method: 'DELETE' });
+      await fetch(`${API_URL}/lost-found/${id}`, { method: 'DELETE' });
       fetchLostFound();
     } catch (err) {
       console.error(err);
@@ -2964,7 +2965,7 @@ function StaffDashboard() {
                           <td style={{ textAlign: 'center' }}>
                             {book.cover_url ? (
                               <img
-                                src={book.cover_url}
+                                src={resolveMediaUrl(book.cover_url)}
                                 alt={book.title}
                                 className="books-thumb"
                                 loading="lazy"
@@ -3386,7 +3387,7 @@ function StaffDashboard() {
                   </div>
                   <div>
                     <img 
-                      src={handoverData.proof_photo} 
+                      src={resolveMediaUrl(handoverData.proof_photo)} 
                       alt="Bukti Foto" 
                       style={{ 
                         maxWidth: '100%', 
@@ -3611,7 +3612,7 @@ function StaffDashboard() {
 
             <div style={{ background: '#000', borderRadius: '12px', overflow: 'hidden', marginBottom: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
               <img 
-                src={viewPhotoItem.proof_photo} 
+                src={resolveMediaUrl(viewPhotoItem.proof_photo)} 
                 alt="Foto Bukti Orang Pengambil" 
                 style={{ maxWidth: '100%', maxHeight: '350px', objectFit: 'contain', display: 'block', margin: '0 auto' }} 
               />
@@ -3812,7 +3813,7 @@ function StaffDashboard() {
                       }}>
                         {coverPreview ? (
                           <img
-                            src={coverPreview}
+                            src={resolveMediaUrl(coverPreview)}
                             alt="Preview Sampul"
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                           />
@@ -3885,7 +3886,7 @@ function StaffDashboard() {
                                   title={c.title}
                                 >
                                   <img
-                                    src={c.cover_url}
+                                    src={resolveMediaUrl(c.cover_url)}
                                     alt={c.title}
                                     style={{ width: '100%', height: '70px', objectFit: 'cover', borderRadius: '4px' }}
                                   />

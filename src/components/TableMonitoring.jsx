@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useModal } from '../context/ModalContext';
+import { API_URL } from '../config/api';
 
 // Zona default di Perpustakaan Umum Kota Parepare
 const ZONES = [
@@ -91,7 +92,7 @@ export default function TableMonitoring() {
   const fetchTableData = async (isManual = false) => {
     if (isManual) setLoading(true);
     try {
-      const res = await fetch('/api/tables');
+      const res = await fetch(`${API_URL}/tables`);
       if (res.ok) {
         const data = await res.json();
         if (data.tables && Array.isArray(data.tables) && data.tables.length > 0) {
@@ -186,7 +187,7 @@ export default function TableMonitoring() {
   const handleDirectCheckin = async (table) => {
     setIsActionLoading(true);
     try {
-      const res = await fetch('/api/tables/checkin', {
+      const res = await fetch(`${API_URL}/tables/checkin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -229,7 +230,7 @@ export default function TableMonitoring() {
 
     setIsActionLoading(true);
     try {
-      const res = await fetch('/api/tables/checkout', {
+      const res = await fetch(`${API_URL}/tables/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ table_number: table.table_number, id: table.id })
