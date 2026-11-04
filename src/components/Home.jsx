@@ -28,7 +28,7 @@ function Home() {
         <p>Sistem layanan perpustakaan pintar & pemesanan buku digital</p>
       </div>
       
-      <div className="features-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', maxWidth: '900px', margin: '2rem auto 0' }}>
+      <div className="features-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', maxWidth: '900px', width: '100%', margin: '2rem auto 0' }}>
         <div className="feature-card glass-panel" onClick={() => navigate('/qr-system')} style={{ cursor: 'pointer', transition: 'all 0.25s ease' }}>
           <div className="feature-icon-wrapper" style={{ background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(139, 92, 246, 0.25))', color: '#818cf8', boxShadow: '0 4px 15px rgba(99, 102, 241, 0.2)' }}>
             <BookOpen size={32} />

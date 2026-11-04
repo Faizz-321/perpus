@@ -117,6 +117,43 @@ function Start-MySQLServiceOrXampp {
     }
 }
 
+function Start-ApacheServiceOrXampp {
+    $httpdProc = Get-Process -Name "httpd" -ErrorAction SilentlyContinue
+    if ($httpdProc) {
+        Write-Host "  [OK] Apache / phpMyAdmin sudah berjalan (http://localhost/phpmyadmin)" -ForegroundColor Green
+        return
+    }
+
+    Write-Host "  [..] Menyalakan Apache XAMPP (untuk phpMyAdmin)..." -ForegroundColor Yellow
+    $apacheSvc = Get-Service -Name "Apache*" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($apacheSvc) {
+        Start-Service -Name $apacheSvc.Name -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+    }
+
+    if (-not (Get-Process -Name "httpd" -ErrorAction SilentlyContinue)) {
+        $apachePaths = @(
+            "C:\xampp\apache\bin\httpd.exe",
+            "D:\xampp\apache\bin\httpd.exe",
+            "E:\xampp\apache\bin\httpd.exe"
+        )
+        foreach ($httpd in $apachePaths) {
+            if (Test-Path $httpd) {
+                $apacheRoot = Split-Path -Parent (Split-Path -Parent $httpd)
+                Start-Process -FilePath $httpd -WorkingDirectory $apacheRoot -WindowStyle Hidden
+                break
+            }
+        }
+        Start-Sleep -Seconds 2
+    }
+
+    if (Get-Process -Name "httpd" -ErrorAction SilentlyContinue) {
+        Write-Host "  [OK] Apache / phpMyAdmin aktif (http://localhost/phpmyadmin)" -ForegroundColor Green
+    } else {
+        Write-Host "  [i]  Apache belum berjalan (jika ingin buka phpMyAdmin, klik Start pada Apache di XAMPP)" -ForegroundColor Yellow
+    }
+}
+
 function Start-AllServices {
     Save-EnvironmentHints
     if (Test-Path $StopFlag) {
@@ -129,8 +166,9 @@ function Start-AllServices {
     Write-Host "   MENYALAKAN SERVER WEBSITE PERPUSTAKAAN PAREPARE   " -ForegroundColor Cyan
     Write-Host "=====================================================" -ForegroundColor Cyan
 
-    # 1. MySQL
+    # 1. MySQL & Apache (phpMyAdmin)
     Start-MySQLServiceOrXampp
+    Start-ApacheServiceOrXampp
 
     # 2. Backend Express (Port 5000)
     $backendPidFile = Join-Path $LogDir "backend-watchdog.pid"
@@ -203,7 +241,12 @@ function Start-AllServices {
 
             $tokenVal = ""
             if (Test-Path $TokenFile) {
-                $tokenVal = (Get-Content $TokenFile -Raw).Trim()
+                $rawToken = (Get-Content $TokenFile -Raw).Trim()
+                if ($rawToken -match '(eyJ[A-Za-z0-9_\-\.=]+)') {
+                    $tokenVal = $Matches[1]
+                } else {
+                    $tokenVal = $rawToken
+                }
             }
 
             $cfConfigPath = Join-Path $env:USERPROFILE ".cloudflared\config.yml"
@@ -249,8 +292,10 @@ function Stop-AllServices {
 
     Stop-PortProcess 5000
     Stop-PortProcess 5173
+    Stop-Service -Name "Cloudflared" -ErrorAction SilentlyContinue
+    Stop-Process -Name "cloudflared" -Force -ErrorAction SilentlyContinue
 
-    Write-Host "  [OK] Backend (5000) & Frontend (5173) telah dihentikan." -ForegroundColor Green
+    Write-Host "  [OK] Backend (5000), Frontend (5173), & Cloudflare Tunnel telah dihentikan." -ForegroundColor Green
     Write-Host ""
 }
 
@@ -258,11 +303,13 @@ function Show-Status {
     Write-Host ""
     Write-Host "=== STATUS SERVER WEBSITE PERPUSTAKAAN ===" -ForegroundColor Cyan
     $m = Test-PortListening 3306
+    $a = ($null -ne (Get-Process -Name "httpd" -ErrorAction SilentlyContinue))
     $b = Test-PortListening 5000
     $f = Test-PortListening 5173
     $c = ($null -ne (Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue))
 
     Write-Host ("  MySQL Database (3306)    : " + ($(if ($m) { "ONLINE" } else { "OFFLINE" }))) -ForegroundColor ($(if ($m) { "Green" } else { "Red" }))
+    Write-Host ("  Apache / phpMyAdmin (80) : " + ($(if ($a) { "ONLINE (http://localhost/phpmyadmin)" } else { "OFFLINE" }))) -ForegroundColor ($(if ($a) { "Green" } else { "Yellow" }))
     Write-Host ("  Backend API (5000)       : " + ($(if ($b) { "ONLINE" } else { "OFFLINE" }))) -ForegroundColor ($(if ($b) { "Green" } else { "Red" }))
     Write-Host ("  Frontend Vite (5173)     : " + ($(if ($f) { "ONLINE" } else { "OFFLINE" }))) -ForegroundColor ($(if ($f) { "Green" } else { "Red" }))
     Write-Host ("  Cloudflare Tunnel        : " + ($(if ($c) { "ONLINE" } else { "OFFLINE" }))) -ForegroundColor ($(if ($c) { "Green" } else { "Yellow" }))
@@ -331,6 +378,6 @@ switch ($Action) {
     "status"           { Show-Status }
     "autostart-user"   { Install-AutoStartUser; Start-AllServices }
     "autostart-system" { Install-AutoStartSystem }
-    "remove-autostart" { Remove-AutoStart }
+    "remove-autostart" { Stop-AllServices; Remove-AutoStart }
 }
 

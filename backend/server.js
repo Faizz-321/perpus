@@ -90,9 +90,12 @@ const DB_NAME = process.env.DB_NAME || 'bibliotech_db';
 let pool = null;
 let isDbConnected = false;
 let dbInitError = null;
+let isDbInitializing = false;
 
-// Fungsi mandiri untuk auto-connect, auto-create database & auto-create tables
+// Fungsi mandiri untuk auto-connect, auto-create database & auto-create tables (dengan auto-retry)
 async function initializeDatabase() {
+  if (pool || isDbInitializing) return;
+  isDbInitializing = true;
   console.log(`🔌 Menghubungkan ke MySQL di ${DB_HOST}:${DB_PORT} (User: ${DB_USER})...`);
 
   // 1. Koneksi awal ke host MySQL (tanpa pilih database terlebih dahulu)
@@ -106,10 +109,12 @@ async function initializeDatabase() {
 
   initConn.connect((err) => {
     if (err) {
+      isDbInitializing = false;
       isDbConnected = false;
       dbInitError = err.message;
       console.error('❌ Gagal terhubung ke MySQL Server:', err.message);
-      console.error('💡 Tips: Pastikan modul MySQL di XAMPP Control Panel sudah AKTIF (START / Hijau).');
+      console.error('💡 Tips: Pastikan modul MySQL di XAMPP Control Panel sudah AKTIF (START / Hijau). Mencoba ulang otomatis dalam 5 detik...');
+      setTimeout(initializeDatabase, 5000);
       return;
     }
 
@@ -122,9 +127,11 @@ async function initializeDatabase() {
         initConn.end(); // Tutup koneksi awal
 
         if (errDb) {
+          isDbInitializing = false;
           isDbConnected = false;
           dbInitError = errDb.message;
           console.error(`❌ Gagal membuat / memverifikasi database '${DB_NAME}':`, errDb.message);
+          setTimeout(initializeDatabase, 5000);
           return;
         }
 
@@ -154,12 +161,19 @@ async function initializeDatabase() {
         // 4. Verifikasi dan migrasi semua tabel secara otomatis
         pool.getConnection((poolConnErr, connection) => {
           if (poolConnErr) {
+            if (pool) {
+              try { pool.end(); } catch {}
+              pool = null;
+            }
+            isDbInitializing = false;
             isDbConnected = false;
             dbInitError = poolConnErr.message;
             console.error('❌ Gagal mendapatkan koneksi dari pool:', poolConnErr.message);
+            setTimeout(initializeDatabase, 5000);
             return;
           }
 
+          isDbInitializing = false;
           isDbConnected = true;
           dbInitError = null;
           console.log(`✅ Koneksi Pool ke database '${DB_NAME}' aktif & stabil!`);

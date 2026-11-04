@@ -740,6 +740,14 @@ body {
   padding: 2rem 1.5rem;
 }
 
+.staff-main-panel {
+  padding: 1.5rem;
+}
+
+.staff-home-hero {
+  padding: 2.5rem 1.5rem;
+}
+
 /* Orders Grid & Card (Staff Dashboard) */
 .orders-grid {
   display: grid;
@@ -954,13 +962,27 @@ body {
 
   /* Home Page */
   .home-hero-panel {
-    padding: 2rem 1rem !important;
+    padding: 1.75rem 0.9rem !important;
+  }
+
+  .staff-main-panel {
+    padding: 0.9rem 0.7rem !important;
   }
 
   .features-grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 1rem !important;
     margin-top: 1.25rem;
+    width: 100% !important;
+    box-sizing: border-box;
+  }
+
+  .features-grid .feature-card {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin: 0 auto;
+    padding: 1.25rem 1rem !important;
   }
 
   /* Page Headers */

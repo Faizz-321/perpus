@@ -103,7 +103,7 @@ export default function StaffHome({ onSelectModule, ordersCount = 0, booksCount 
   ];
 
   return (
-    <div className="glass-panel home-hero-panel" style={{ maxWidth: '1150px', margin: '0 auto', padding: '2.5rem 1.5rem' }}>
+    <div className="glass-panel home-hero-panel staff-home-hero" style={{ maxWidth: '1150px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
       {/* Header Portal Staf */}
       <div className="page-header" style={{ marginBottom: '2.5rem', textAlign: 'center' }}>
         {/* Tiga Logo Resmi */}
@@ -135,7 +135,7 @@ export default function StaffHome({ onSelectModule, ordersCount = 0, booksCount 
           <span>PORTAL OPERASIONAL STAF PERPUSTAKAAN</span>
         </div>
 
-        <h1 style={{ fontSize: '2.1rem', fontWeight: '800', color: '#ffffff', letterSpacing: '-0.02em', marginBottom: '0.5rem', lineHeight: 1.25 }}>
+        <h1 style={{ fontSize: 'clamp(1.35rem, 4.5vw, 2.1rem)', fontWeight: '800', color: '#ffffff', letterSpacing: '-0.02em', marginBottom: '0.5rem', lineHeight: 1.25 }}>
           Selamat Datang di Portal Staf Perpustakaan Kota Parepare
         </h1>
         <p style={{ fontSize: '0.96rem', color: '#cbd5e1', maxWidth: '680px', margin: '0 auto', lineHeight: 1.6 }}>
@@ -148,9 +148,11 @@ export default function StaffHome({ onSelectModule, ordersCount = 0, booksCount 
         className="features-grid" 
         style={{ 
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', 
           gap: '1.4rem', 
-          margin: '0 auto' 
+          width: '100%',
+          margin: '0 auto',
+          boxSizing: 'border-box'
         }}
       >
         {staffModules.map((item) => {
@@ -235,9 +237,11 @@ export default function StaffHome({ onSelectModule, ordersCount = 0, booksCount 
               {/* Tombol Aksi Buka Modul */}
               <div 
                 style={{ 
-                  display: 'inline-flex', 
+                  display: 'flex', 
                   alignItems: 'center', 
+                  justifyContent: 'center',
                   gap: '6px', 
+                  width: '100%',
                   fontSize: '0.84rem', 
                   fontWeight: '700', 
                   color: item.iconColor,

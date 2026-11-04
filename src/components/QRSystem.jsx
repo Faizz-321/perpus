@@ -94,6 +94,7 @@ function QRSystem() {
   // Data buku dan filter
   const [books, setBooks] = useState([]);
   const [loadingBooks, setLoadingBooks] = useState(true);
+  const [booksError, setBooksError] = useState(false);
   const [selectedBooks, setSelectedBooks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -253,26 +254,36 @@ function QRSystem() {
     };
   }, [rateModalBook]);
 
-  // Ambil 260+ buku inventaris dari database MySQL
+  // Ambil 860+ buku inventaris dari database MySQL (dengan auto-retry jika server/DB baru dinyalakan)
+  const loadBooks = async (silent = false) => {
+    if (!silent) setLoadingBooks(true);
+    try {
+      const res = await fetch(`${API_URL}/books`);
+      if (!res.ok) throw new Error('Gagal mengambil katalog');
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setBooks(data);
+        setBooksError(false);
+      }
+    } catch (err) {
+      console.warn('Gagal memuat katalog buku:', err.message);
+      setBooksError(true);
+    } finally {
+      if (!silent) setLoadingBooks(false);
+    }
+  };
+
   useEffect(() => {
-    setLoadingBooks(true);
-    fetch(`${API_URL}/books`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Gagal mengambil katalog');
-        return res.json();
-      })
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setBooks(data);
-        }
-      })
-      .catch((err) => {
-        console.warn('Gagal memuat katalog buku:', err.message);
-      })
-      .finally(() => {
-        setLoadingBooks(false);
-      });
+    loadBooks(false);
   }, []);
+
+  useEffect(() => {
+    if (!booksError || books.length > 0) return;
+    const retryTimer = setInterval(() => {
+      loadBooks(true);
+    }, 5000);
+    return () => clearInterval(retryTimer);
+  }, [booksError, books.length]);
 
   // Polling status tiket & panggilan suara secara real-time
   // TETAP AKTIF di latar belakang baik saat pengunjung di tiket (step 2) MAUPUN saat melihat katalog (step 1)
@@ -1330,8 +1341,25 @@ function QRSystem() {
             <div style={{ textAlign: 'center', padding: '4rem 0' }}>
               <Loader2 size={36} className="animate-spin" style={{ color: 'var(--primary-color)', margin: '0 auto' }} />
               <p style={{ marginTop: '1rem', color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                Menghubungkan ke database MySQL & memuat katalog 260+ buku...
+                Menghubungkan ke database MySQL & memuat katalog 860+ buku...
               </p>
+            </div>
+          ) : books.length === 0 && booksError ? (
+            <div style={{ textAlign: 'center', padding: '3rem 1.25rem', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '12px' }}>
+              <AlertCircle size={42} style={{ color: '#f87171', margin: '0 auto' }} />
+              <p style={{ marginTop: '0.6rem', fontSize: '1rem', fontWeight: '600', color: '#fecaca' }}>
+                Server Katalog / Database MySQL Belum Aktif
+              </p>
+              <p style={{ marginTop: '0.35rem', fontSize: '0.86rem', color: 'var(--text-muted)', maxWidth: '520px', marginInline: 'auto' }}>
+                Pastikan MySQL (XAMPP) dan Backend Server (port 5000) sudah berjalan dengan menjalankan <code>npm start</code> atau <code>start-all.bat</code>. Sistem akan otomatis memuat buku begitu server aktif.
+              </p>
+              <button 
+                className="btn btn-secondary" 
+                style={{ marginTop: '1rem', fontSize: '0.85rem' }} 
+                onClick={() => loadBooks(false)}
+              >
+                Coba Muat Ulang Sekarang
+              </button>
             </div>
           ) : filteredBooks.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '3rem 1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '12px' }}>

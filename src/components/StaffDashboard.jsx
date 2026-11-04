@@ -958,7 +958,7 @@ function StaffDashboard() {
   const totalActiveLf = staffFoundItems.length + userReportItems.length;
 
   return (
-    <div className="glass-panel" style={{ padding: '1.5rem' }}>
+    <div className={`glass-panel staff-main-panel ${activeModule === 'portal' ? 'is-portal-home' : ''}`}>
       {/* ======================================================== */}
       {/* HEADER PORTAL PETUGAS PERPUSTAKAAN */}
       {/* ======================================================== */}
@@ -1003,6 +1003,8 @@ function StaffDashboard() {
       {/* ======================================================== */}
       
       {/* Desktop Only (Web): Modul Grid Modern */}
+      {activeModule !== 'portal' && (
+        <>
       <div className="staff-module-nav desktop-module-nav">
         <button
           type="button"
@@ -1351,6 +1353,10 @@ function StaffDashboard() {
           </>
         )}
       </div>
+
+      {/* ======================================================== */}
+        </>
+      )}
 
       {/* ======================================================== */}
       {/* MODUL 0: PORTAL / BERANDA UTAMA STAF (HERO & 6 KARTU MODUL) */}
