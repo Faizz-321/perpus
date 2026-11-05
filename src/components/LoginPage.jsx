@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { BookOpen, Shield, Eye, EyeOff, LogIn, ArrowRight } from 'lucide-react';
 
-const STAFF_PIN = '1234';
+const STAFF_PIN = import.meta.env.VITE_STAFF_PIN || 'pelayanan123';
 
 function LoginPage({ onLogin }) {
   const [selectedRole, setSelectedRole] = useState(null);
@@ -152,7 +152,7 @@ function LoginPage({ onLogin }) {
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>PIN Staf</label>
                 <div style={{ position: 'relative' }}>
-                  <input type={showPin ? 'text' : 'password'} className="form-control" placeholder="Masukkan PIN staf..." value={pin} onChange={e => { setPin(e.target.value); setError(''); }} maxLength={8} autoFocus style={{ paddingRight: '2.8rem', letterSpacing: '0.2em', fontSize: '1.1rem' }} />
+                  <input type={showPin ? 'text' : 'password'} className="form-control" placeholder="Masukkan PIN staf..." value={pin} onChange={e => { setPin(e.target.value); setError(''); }} maxLength={20} autoFocus style={{ paddingRight: '2.8rem', letterSpacing: '0.2em', fontSize: '1.1rem' }} />
                   <button type="button" onClick={() => setShowPin(!showPin)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>{showPin ? <EyeOff size={18} /> : <Eye size={18} />}</button>
                 </div>
                 {error && <p style={{ color: '#f87171', fontSize: '0.83rem', marginTop: '0.5rem' }}>{error}</p>}
@@ -168,7 +168,7 @@ function LoginPage({ onLogin }) {
             </form>
 
             <div style={{ marginTop: '1rem', padding: '0.7rem', borderRadius: '8px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-              PIN default: <strong style={{ color: 'var(--primary-color)' }}>1234</strong>
+
             </div>
           </div>
         )}
