@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true, // Mengizinkan akses dari network lokal
-    allowedHosts: ['.ilkomith.web.id'],
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://localhost:5000',
@@ -17,6 +17,10 @@ export default defineConfig({
         changeOrigin: true
       },
       '/original': {
+        target: 'http://localhost:5000',
+        changeOrigin: true
+      },
+      '/ebooks': {
         target: 'http://localhost:5000',
         changeOrigin: true
       }

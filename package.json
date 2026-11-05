@@ -8,6 +8,7 @@
     "stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/server-manager.ps1 -Action stop",
     "status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/server-manager.ps1 -Action status",
     "autostart": "install-autostart.bat",
+    "autostart:off": "uninstall-autostart.bat",
     "dev": "vite --host",
     "build": "vite build",
     "lint": "oxlint",

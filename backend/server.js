@@ -1105,6 +1105,9 @@ app.get('/api/notifications', checkDb, (req, res) => {
     SELECT id, ticket_code, book_title, table_no, created_at
     FROM orders 
     WHERE status = 'pending' 
+      AND (is_manual = 0 OR is_manual IS NULL)
+      AND (table_no IS NULL OR table_no != 'Baca di Tempat')
+      AND (ticket_code IS NULL OR ticket_code NOT LIKE 'MNL-%')
       AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
     ORDER BY created_at DESC
     LIMIT 20

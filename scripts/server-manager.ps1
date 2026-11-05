@@ -9,6 +9,7 @@ $BackendDir = Join-Path $RootDir "backend"
 $LogDir = Join-Path $RootDir "logs"
 $StopFlag = Join-Path $LogDir "stop.flag"
 $NodePathFile = Join-Path $LogDir "node-path.txt"
+$CfExePathFile = Join-Path $LogDir "cloudflared-exe-path.txt"
 $CfConfigPathFile = Join-Path $LogDir "cloudflared-config-path.txt"
 $TokenFile = Join-Path $RootDir "cloudflared-token.txt"
 
@@ -21,10 +22,38 @@ function Save-EnvironmentHints {
     if ($nodeCmd -and (Test-Path $nodeCmd.Source)) {
         $nodeCmd.Source | Set-Content -Path $NodePathFile -Force
     }
+    $cfCmd = Get-Command cloudflared -ErrorAction SilentlyContinue
+    if ($cfCmd -and (Test-Path $cfCmd.Source)) {
+        $cfCmd.Source | Set-Content -Path $CfExePathFile -Force
+    }
     $userCfConfig = Join-Path $env:USERPROFILE ".cloudflared\config.yml"
     if (Test-Path $userCfConfig) {
         $userCfConfig | Set-Content -Path $CfConfigPathFile -Force
     }
+}
+
+function Get-CloudflaredExe {
+    $localCf = Join-Path $RootDir "cloudflared.exe"
+    if (Test-Path $localCf) { return $localCf }
+
+    $cfCmd = Get-Command cloudflared -ErrorAction SilentlyContinue
+    if ($cfCmd -and (Test-Path $cfCmd.Source)) {
+        $cfCmd.Source | Set-Content -Path $CfExePathFile -Force
+        return $cfCmd.Source
+    }
+    if (Test-Path $CfExePathFile) {
+        $savedCf = (Get-Content $CfExePathFile -Raw).Trim()
+        if ($savedCf -and (Test-Path $savedCf)) { return $savedCf }
+    }
+    $cfCandidates = @(
+        "C:\Program Files (x86)\cloudflared\cloudflared.exe",
+        "C:\Program Files\cloudflared\cloudflared.exe",
+        "$env:LOCALAPPDATA\Microsoft\WinGet\Links\cloudflared.exe"
+    )
+    foreach ($c in $cfCandidates) {
+        if ($c -and (Test-Path $c)) { return $c }
+    }
+    return ""
 }
 
 function Get-NodeExe {
@@ -71,6 +100,14 @@ function Stop-PidFile([string]$PidFile) {
         }
         Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
     }
+}
+
+function Test-PidFileAlive([string]$PidFile) {
+    if (-not (Test-Path $PidFile)) { return $false }
+    $pidVal = (Get-Content $PidFile -Raw).Trim()
+    if ($pidVal -notmatch '^\d+$') { return $false }
+    $proc = Get-Process -Id ([int]$pidVal) -ErrorAction SilentlyContinue
+    return ($null -ne $proc)
 }
 
 function Start-MySQLServiceOrXampp {
@@ -175,10 +212,17 @@ function Start-AllServices {
     $backendLog = Join-Path $LogDir "backend.log"
     $backendScript = Join-Path $PSScriptRoot "run-backend-loop.ps1"
 
-    if (Test-PortListening 5000) {
-        Write-Host "  [OK] Backend API sudah berjalan (http://localhost:5000)" -ForegroundColor Green
+    if ((Test-PortListening 5000) -and (Test-PidFileAlive $backendPidFile)) {
+        Write-Host "  [OK] Backend API sudah berjalan di latar belakang (http://localhost:5000)" -ForegroundColor Green
     } else {
-        Write-Host "  [..] Menyalakan Backend API (Port 5000)..." -ForegroundColor Yellow
+        if (Test-PortListening 5000) {
+            Write-Host "  [..] Memindahkan Backend API dari terminal manual ke latar belakang..." -ForegroundColor Yellow
+            Stop-PidFile $backendPidFile
+            Stop-PortProcess 5000
+            Start-Sleep -Milliseconds 600
+        } else {
+            Write-Host "  [..] Menyalakan Backend API (Port 5000)..." -ForegroundColor Yellow
+        }
         $argsBackend = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$backendScript`" -NodeExe `"$nodeExe`" -BackendDir `"$BackendDir`" -LogFile `"$backendLog`" -PidFile `"$backendPidFile`" -StopFlag `"$StopFlag`""
         Start-Process -FilePath "powershell.exe" -ArgumentList $argsBackend -WindowStyle Hidden
         for ($i = 0; $i -lt 16; $i++) {
@@ -197,10 +241,17 @@ function Start-AllServices {
     $frontendLog = Join-Path $LogDir "frontend.log"
     $frontendScript = Join-Path $PSScriptRoot "run-frontend-loop.ps1"
 
-    if (Test-PortListening 5173) {
-        Write-Host "  [OK] Frontend Website sudah berjalan (http://localhost:5173)" -ForegroundColor Green
+    if ((Test-PortListening 5173) -and (Test-PidFileAlive $frontendPidFile)) {
+        Write-Host "  [OK] Frontend Website sudah berjalan di latar belakang (http://localhost:5173)" -ForegroundColor Green
     } else {
-        Write-Host "  [..] Menyalakan Frontend Website (Port 5173)..." -ForegroundColor Yellow
+        if (Test-PortListening 5173) {
+            Write-Host "  [..] Memindahkan Frontend Website dari terminal manual ke latar belakang..." -ForegroundColor Yellow
+            Stop-PidFile $frontendPidFile
+            Stop-PortProcess 5173
+            Start-Sleep -Milliseconds 600
+        } else {
+            Write-Host "  [..] Menyalakan Frontend Website (Port 5173)..." -ForegroundColor Yellow
+        }
         $argsFrontend = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$frontendScript`" -NodeExe `"$nodeExe`" -RootDir `"$RootDir`" -LogFile `"$frontendLog`" -PidFile `"$frontendPidFile`" -StopFlag `"$StopFlag`""
         Start-Process -FilePath "powershell.exe" -ArgumentList $argsFrontend -WindowStyle Hidden
         for ($i = 0; $i -lt 16; $i++) {
@@ -229,11 +280,7 @@ function Start-AllServices {
         if ($cfProc) {
             Write-Host "  [OK] Cloudflare Tunnel Service berhasil dinyalakan" -ForegroundColor Green
         } else {
-            $cfExe = Join-Path $RootDir "cloudflared.exe"
-            if (-not (Test-Path $cfExe)) {
-                $cfCmd = Get-Command cloudflared -ErrorAction SilentlyContinue
-                if ($cfCmd) { $cfExe = $cfCmd.Source }
-            }
+            $cfExe = Get-CloudflaredExe
 
             $tunnelScript = Join-Path $PSScriptRoot "run-tunnel-loop.ps1"
             $tunnelPidFile = Join-Path $LogDir "tunnel-watchdog.pid"
@@ -241,10 +288,11 @@ function Start-AllServices {
 
             $tokenVal = ""
             if (Test-Path $TokenFile) {
-                $rawToken = (Get-Content $TokenFile -Raw).Trim()
-                if ($rawToken -match '(eyJ[A-Za-z0-9_\-\.=]+)') {
+                $cleanLines = @(Get-Content $TokenFile | Where-Object { $_.Trim() -ne "" -and (-not $_.Trim().StartsWith("#")) })
+                $rawToken = ($cleanLines -join " ").Trim()
+                if ($rawToken -match '(eyJ[A-Za-z0-9_\-\.=]{20,})') {
                     $tokenVal = $Matches[1]
-                } else {
+                } elseif ($rawToken.Length -gt 20) {
                     $tokenVal = $rawToken
                 }
             }
@@ -254,13 +302,13 @@ function Start-AllServices {
                 $cfConfigPath = (Get-Content $CfConfigPathFile -Raw).Trim()
             }
 
-            if ((Test-Path $cfExe) -and $tokenVal) {
+            if ($cfExe -and (Test-Path $cfExe) -and $tokenVal) {
                 Write-Host "  [..] Menyalakan Cloudflare Tunnel via cloudflared-token.txt..." -ForegroundColor Yellow
                 $argsTunnel = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$tunnelScript`" -CloudflaredExe `"$cfExe`" -Mode token -ArgValue `"$tokenVal`" -LogFile `"$tunnelLog`" -PidFile `"$tunnelPidFile`" -StopFlag `"$StopFlag`""
                 Start-Process -FilePath "powershell.exe" -ArgumentList $argsTunnel -WindowStyle Hidden
                 Start-Sleep -Seconds 2
                 Write-Host "  [OK] Cloudflare Tunnel berjalan di latar belakang" -ForegroundColor Green
-            } elseif ((Test-Path $cfExe) -and (Test-Path $cfConfigPath)) {
+            } elseif ($cfExe -and (Test-Path $cfExe) -and (Test-Path $cfConfigPath)) {
                 Write-Host "  [..] Menyalakan Cloudflare Tunnel via config.yml..." -ForegroundColor Yellow
                 $argsTunnel = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$tunnelScript`" -CloudflaredExe `"$cfExe`" -Mode config -ArgValue `"$cfConfigPath`" -LogFile `"$tunnelLog`" -PidFile `"$tunnelPidFile`" -StopFlag `"$StopFlag`""
                 Start-Process -FilePath "powershell.exe" -ArgumentList $argsTunnel -WindowStyle Hidden
@@ -366,10 +414,34 @@ function Remove-AutoStart {
     $vbsPath = Join-Path $startupDir "PerpustakaanParepareServer.vbs"
     if (Test-Path $vbsPath) {
         Remove-Item $vbsPath -Force -ErrorAction SilentlyContinue
-        Write-Host "  [OK] Startup Login dihapus." -ForegroundColor Green
     }
+    Get-ChildItem "C:\Users\*\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\PerpustakaanParepareServer.vbs" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+    Write-Host "  [OK] Startup Login dihapus." -ForegroundColor Green
+
     & schtasks.exe /Delete /TN "PerpustakaanParepareServer" /F 2>$null | Out-Null
-    Write-Host "  [OK] Scheduled Task PerpustakaanParepareServer dihapus (jika ada)." -ForegroundColor Green
+    Write-Host "  [OK] Scheduled Task PerpustakaanParepareServer dihapus." -ForegroundColor Green
+
+    $cfSvc = Get-Service -Name "Cloudflared" -ErrorAction SilentlyContinue
+    if ($cfSvc) {
+        Stop-Service -Name "Cloudflared" -Force -ErrorAction SilentlyContinue
+        Set-Service -Name "Cloudflared" -StartupType Disabled -ErrorAction SilentlyContinue
+        $cfExe = Get-CloudflaredExe
+        if ($cfExe -and (Test-Path $cfExe)) {
+            & $cfExe service uninstall 2>$null | Out-Null
+        }
+        Write-Host "  [OK] Windows Service Cloudflared dihentikan & dihapus." -ForegroundColor Green
+    }
+
+    & taskkill.exe /F /IM cloudflared.exe /T 2>$null | Out-Null
+
+    foreach ($mysqlAdmin in @("C:\xampp\mysql\bin\mysqladmin.exe", "D:\xampp\mysql\bin\mysqladmin.exe", "E:\xampp\mysql\bin\mysqladmin.exe")) {
+        if (Test-Path $mysqlAdmin) {
+            & $mysqlAdmin --connect-timeout=2 -u root shutdown 2>$null | Out-Null
+            break
+        }
+    }
+    Stop-Process -Name "httpd" -Force -ErrorAction SilentlyContinue
+    Write-Host "  [OK] Semua server & tunnel di perangkat ini sudah dimatikan permanen." -ForegroundColor Green
 }
 
 switch ($Action) {

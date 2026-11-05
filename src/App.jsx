@@ -169,7 +169,13 @@ function StaffNav({ onLogout, notifCount }) {
       const res = await fetch(`${API_URL}/notifications`);
       if (res.ok) {
         const data = await res.json();
-        const list = Array.isArray(data) ? data : [];
+        const rawList = Array.isArray(data) ? data : [];
+        const list = rawList.filter(item => {
+          const isManual = Boolean(item.is_manual) || 
+            item.table_no === 'Baca di Tempat' || 
+            (item.ticket_code && item.ticket_code.startsWith('MNL-'));
+          return !isManual;
+        });
         setNotifications(list);
 
         // Deteksi jika ada pesanan baru yang belum pernah muncul sebelumnya
