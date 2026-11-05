@@ -264,6 +264,8 @@ function setupAllTables() {
     pool.query('ALTER TABLE orders ADD COLUMN call_count INT DEFAULT 0', () => {});
     pool.query('ALTER TABLE orders ADD COLUMN last_called_at DATETIME NULL', () => {});
     pool.query('ALTER TABLE orders ADD COLUMN visitor_last_seen DATETIME NULL', () => {});
+    pool.query('ALTER TABLE orders ADD COLUMN is_manual TINYINT(1) DEFAULT 0', () => {});
+    pool.query('ALTER TABLE orders ADD COLUMN service_date VARCHAR(20) NULL', () => {});
   });
 
 
@@ -595,10 +597,27 @@ app.get('/api/orders', checkDb, (req, res) => {
       const memLastSeen = visitorPresenceMap.get(row.id) || 0;
       const dbLastSeen = row.visitor_last_seen ? new Date(row.visitor_last_seen).getTime() : 0;
       const effectiveLastSeen = Math.max(memLastSeen, dbLastSeen);
-      // Dianggap aktif di web jika ada aktivitas/ping dalam 8 detik terakhir
       const isOnline = (now - effectiveLastSeen) < 8000;
+      const isManual = Boolean(row.is_manual) || row.table_no === 'Baca di Tempat' || (row.ticket_code && row.ticket_code.startsWith('MNL-'));
+
+      // Format tanggal service_date yang kebal zona waktu (YYYY-MM-DD)
+      let serviceDate = row.service_date;
+      if (!serviceDate && row.created_at) {
+        const s = String(row.created_at);
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+          serviceDate = s.slice(0, 10);
+        } else {
+          const d = new Date(row.created_at);
+          if (!isNaN(d.getTime())) {
+            serviceDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          }
+        }
+      }
+
       return {
         ...row,
+        service_date: serviceDate || null,
+        is_manual: isManual ? 1 : 0,
         visitor_online: isOnline,
         visitor_last_seen_ms: effectiveLastSeen || null
       };
@@ -607,7 +626,7 @@ app.get('/api/orders', checkDb, (req, res) => {
   });
 });
 
-// Buat pesanan baru dari meja pengunjung
+// Buat pesanan baru dari meja pengunjung atau pencatatan pelayanan manual (Baca di Tempat)
 app.post('/api/orders', checkDb, (req, res) => {
   let { book_title, table_no, books_list } = req.body;
 
@@ -621,27 +640,94 @@ app.post('/api/orders', checkDb, (req, res) => {
     book_title = JSON.stringify(book_title);
   }
 
-  if (!book_title || !table_no) {
-    return res.status(400).json({ error: 'Judul buku dan nomor meja wajib diisi' });
+  // Jika table_no tidak diisi (misal pencatatan manual buku baca di tempat / langsung ambil),
+  // otomatis beri label "Baca di Tempat" tanpa mewajibkan nomor meja
+  if (!table_no || typeof table_no !== 'string' || !table_no.trim()) {
+    table_no = 'Baca di Tempat';
   }
 
-  // Generate Kode Tiket unik (misal: TKT-4821)
-  const randomNum = Math.floor(1000 + Math.random() * 9000);
-  const ticket_code = `TKT-${randomNum}`;
-  const status = 'pending';
-  const query = 'INSERT INTO orders (ticket_code, book_title, table_no, status, visitor_last_seen) VALUES (?, ?, ?, ?, NOW())';
+  if (!book_title) {
+    return res.status(400).json({ error: 'Judul buku wajib diisi' });
+  }
 
-  pool.query(query, [ticket_code, book_title, table_no, status], (err, result) => {
+  // Identifikasi pesanan mandiri / manual
+  const isManual = req.body.is_manual || table_no === 'Baca di Tempat' || (req.body.ticket_code && req.body.ticket_code.startsWith('MNL-'));
+  const isManualVal = isManual ? 1 : 0;
+  const randomNum = Math.floor(1000 + Math.random() * 9000);
+  const ticket_code = req.body.ticket_code || (isManual ? `MNL-${randomNum}` : `TKT-${randomNum}`);
+  const status = req.body.status || (isManual ? 'completed' : 'pending');
+
+  // Dukungan tanggal kustom (tepat sesuai tanggal yang dipilih staf: YYYY-MM-DD)
+  let serviceDateStr = null;
+  let customDate = null;
+  if (req.body.service_date) {
+    const sDate = String(req.body.service_date).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(sDate)) {
+      serviceDateStr = sDate.slice(0, 10);
+      customDate = `${serviceDateStr} 10:00:00`;
+    } else {
+      const d = new Date(sDate);
+      if (!isNaN(d.getTime())) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        serviceDateStr = `${y}-${m}-${day}`;
+        customDate = `${serviceDateStr} 10:00:00`;
+      }
+    }
+  }
+
+  if (!serviceDateStr) {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    serviceDateStr = `${y}-${m}-${day}`;
+  }
+
+  const query = customDate
+    ? 'INSERT INTO orders (ticket_code, book_title, table_no, status, created_at, visitor_last_seen) VALUES (?, ?, ?, ?, ?, NOW())'
+    : 'INSERT INTO orders (ticket_code, book_title, table_no, status, created_at, visitor_last_seen) VALUES (?, ?, ?, ?, NOW(), NOW())';
+  const queryParams = customDate
+    ? [ticket_code, book_title, table_no, status, customDate]
+    : [ticket_code, book_title, table_no, status];
+
+  pool.query(query, queryParams, (err, result) => {
+    if (!err && result && result.insertId) {
+      // Sinkronkan ke kolom is_manual dan service_date jika tersedia
+      pool.query('UPDATE orders SET is_manual = ?, service_date = ? WHERE id = ?', [isManualVal, serviceDateStr, result.insertId], () => {});
+    }
     if (err) {
       console.error('Error POST /api/orders:', err);
-      return res.status(500).json({ error: 'Gagal membuat pesanan baru', detail: err.message });
+      return res.status(500).json({ error: 'Gagal membuat pesanan/catatan baru', detail: err.message });
     }
+
+    // Naikkan statistik read_count untuk buku terkait di katalog jika ada
+    try {
+      let rawTitles = [];
+      if (Array.isArray(books_list) && books_list.length > 0) {
+        rawTitles = books_list;
+      } else if (typeof book_title === 'string' && book_title.startsWith('[')) {
+        rawTitles = JSON.parse(book_title);
+      } else if (book_title) {
+        rawTitles = [book_title];
+      }
+      const cleanTitles = rawTitles
+        .map(t => (typeof t === 'string' ? t.trim() : (t?.title || '')).trim())
+        .filter(Boolean);
+      if (cleanTitles.length > 0) {
+        pool.query('UPDATE books SET read_count = COALESCE(read_count, 0) + 1 WHERE title IN (?)', [cleanTitles], () => {});
+      }
+    } catch {
+      // non-blocking
+    }
+
     markVisitorOnline(result.insertId);
     res.status(201).json({
-      message: 'Pesanan berhasil dibuat!',
+      message: 'Catatan pelayanan berhasil disimpan!',
       orderId: result.insertId,
       ticket_code: ticket_code,
-      order: { id: result.insertId, ticket_code, book_title, table_no, status }
+      order: { id: result.insertId, ticket_code, book_title, table_no, status, created_at: customDate || new Date() }
     });
   });
 });
@@ -735,7 +821,7 @@ app.post('/api/orders/:id/call', checkDb, (req, res) => {
 
 // Hapus semua pesanan yang sudah selesai atau dibatalkan (Bersihkan riwayat)
 app.delete('/api/orders/cleanup/completed', checkDb, (req, res) => {
-  const query = "DELETE FROM orders WHERE status = 'completed' OR status = 'cancelled'";
+  const query = "DELETE FROM orders WHERE (status = 'completed' OR status = 'cancelled') AND (is_manual = 0 OR is_manual IS NULL) AND table_no != 'Baca di Tempat' AND ticket_code NOT LIKE 'MNL-%'";
   pool.query(query, (err, result) => {
     if (err) {
       console.error('Error DELETE /api/orders/cleanup/completed:', err);

@@ -209,6 +209,7 @@ function StaffDashboard() {
           const d = new Date(item.created_at);
           timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
+        const isManual = Boolean(item.is_manual) || item.table_no === 'Baca di Tempat' || item.table === 'Baca di Tempat' || (item.ticket_code && item.ticket_code.startsWith('MNL-'));
         return {
           id: item.id,
           ticket_code: item.ticket_code || `TKT-${item.id + 1000}`,
@@ -218,7 +219,8 @@ function StaffDashboard() {
           time: timeStr,
           created_at: item.created_at || null,
           visitor_online: Boolean(item.visitor_online),
-          visitor_last_seen_ms: item.visitor_last_seen_ms || null
+          visitor_last_seen_ms: item.visitor_last_seen_ms || null,
+          is_manual: isManual
         };
       });
 
@@ -917,16 +919,20 @@ function StaffDashboard() {
     }
   };
 
-  // Filter Orders
+  // Filter Orders Khusus Antrean Meja Pengunjung (Catatan manual baca di tempat langsung masuk rekapitulasi, tidak masuk antrean meja)
+  const queueOrders = useMemo(() => {
+    return orders.filter((o) => !o.is_manual);
+  }, [orders]);
+
   const counts = {
-    all: orders.length,
-    in_progress: orders.filter((o) => o.status === 'pending' || o.status === 'searching').length,
-    ready: orders.filter((o) => o.status === 'ready').length,
-    completed: orders.filter((o) => o.status === 'completed').length,
-    cancelled: orders.filter((o) => o.status === 'cancelled').length,
+    all: queueOrders.length,
+    in_progress: queueOrders.filter((o) => o.status === 'pending' || o.status === 'searching').length,
+    ready: queueOrders.filter((o) => o.status === 'ready').length,
+    completed: queueOrders.filter((o) => o.status === 'completed').length,
+    cancelled: queueOrders.filter((o) => o.status === 'cancelled').length,
   };
 
-  const filteredOrders = orders.filter((order) => {
+  const filteredOrders = queueOrders.filter((order) => {
     let matchStatus = true;
     if (statusFilter === 'in_progress') matchStatus = order.status === 'pending' || order.status === 'searching';
     else if (statusFilter === 'ready') matchStatus = order.status === 'ready';

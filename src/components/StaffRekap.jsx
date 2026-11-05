@@ -4,7 +4,8 @@ import {
   BarChart3, Calendar, Clock, BookOpen, Tablet, TrendingUp, 
   Printer, RefreshCw, Filter, Search, CheckCircle2, AlertCircle, FileText, 
   Layers, Users, ArrowUpRight, Award, ChevronDown, Check, X, BookmarkCheck,
-  ChevronLeft, ChevronRight, Hash, PieChart, Ticket, FileSpreadsheet, Table
+  ChevronLeft, ChevronRight, Hash, PieChart, Ticket, FileSpreadsheet, Table,
+  Plus, Trash2, BookMarked
 } from 'lucide-react';
 import { parseOrderBookTitles } from '../utils/orderBooks';
 import { API_URL } from '../config/api';
@@ -42,8 +43,19 @@ export default function StaffRekap({ onBackToOrders }) {
   // Data Mentah dari Backend
   const [orders, setOrders] = useState([]);
   const [ebookReads, setEbookReads] = useState([]);
+  const [catalogBooks, setCatalogBooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // State Input Manual Pelayanan (Baca di Tempat / Tanpa Meja)
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [manualDate, setManualDate] = useState(todayDate);
+  const [manualBookInput, setManualBookInput] = useState('');
+  const [manualBooksList, setManualBooksList] = useState([]);
+  const [isSavingManual, setIsSavingManual] = useState(false);
+  const [manualErrorMsg, setManualErrorMsg] = useState('');
+  const [manualSuccessToast, setManualSuccessToast] = useState('');
+  const [isDeletingOrder, setIsDeletingOrder] = useState(null);
 
   // Filter Tabel Detail
   const [tableSearch, setTableSearch] = useState('');
@@ -56,12 +68,16 @@ export default function StaffRekap({ onBackToOrders }) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [resOrders, resEbooks] = await Promise.all([
+      const [resOrders, resEbooks, resBooks] = await Promise.all([
         fetch(`${API_URL}/orders`).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`${API_URL}/ebooks/read-log`).then(r => r.ok ? r.json() : []).catch(() => [])
+        fetch(`${API_URL}/ebooks/read-log`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_URL}/books`).then(r => r.ok ? r.json() : []).catch(() => [])
       ]);
       setOrders(Array.isArray(resOrders) ? resOrders : []);
       setEbookReads(Array.isArray(resEbooks) ? resEbooks : []);
+      if (Array.isArray(resBooks) && resBooks.length > 0) {
+        setCatalogBooks(resBooks);
+      }
     } catch (err) {
       console.warn('Gagal memuat data rekap:', err);
     } finally {
@@ -79,17 +95,140 @@ export default function StaffRekap({ onBackToOrders }) {
     fetchData();
   };
 
-  // Helper untuk mengecek apakah suatu timestamp masuk ke dalam periode terpilih (Local Timezone)
-  const matchesPeriod = (dateInput) => {
-    if (!dateInput) return false;
+  // Autocomplete Saran Judul Buku dari Katalog untuk Input Manual
+  const manualBookSuggestions = useMemo(() => {
+    const q = manualBookInput.toLowerCase().trim();
+    if (!q || q.length < 1) return [];
+    return catalogBooks
+      .filter(b => b.title && b.title.toLowerCase().includes(q) && !manualBooksList.includes(b.title))
+      .slice(0, 6);
+  }, [manualBookInput, catalogBooks, manualBooksList]);
+
+  const handleAddBookToList = (titleToAdd) => {
+    const clean = (titleToAdd || '').trim();
+    if (!clean) return;
+    if (manualBooksList.includes(clean)) {
+      setManualErrorMsg('Buku ini sudah ada di dalam daftar');
+      return;
+    }
+    setManualBooksList(prev => [...prev, clean]);
+    setManualBookInput('');
+    setManualErrorMsg('');
+  };
+
+  const handleRemoveBookFromList = (index) => {
+    setManualBooksList(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Simpan Pelayanan Manual (Tanpa Meja, Langsung Baca di Tempat)
+  const handleSaveManualOrder = async () => {
+    const finalBooks = [...manualBooksList];
+    if (manualBookInput.trim() && !finalBooks.includes(manualBookInput.trim())) {
+      finalBooks.push(manualBookInput.trim());
+    }
+
+    if (finalBooks.length === 0) {
+      setManualErrorMsg('Silakan pilih atau ketik minimal satu judul buku yang dibaca');
+      return;
+    }
+    if (!manualDate) {
+      setManualErrorMsg('Silakan tentukan tanggal pelayanan');
+      return;
+    }
+
+    setIsSavingManual(true);
+    setManualErrorMsg('');
+    try {
+      const payload = {
+        books_list: finalBooks,
+        table_no: 'Baca di Tempat',
+        service_date: manualDate,
+        is_manual: true,
+        status: 'completed'
+      };
+
+      const res = await fetch(`${API_URL}/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Gagal menyimpan catatan pelayanan');
+      }
+
+      setShowManualModal(false);
+      setManualBookInput('');
+      setManualBooksList([]);
+      setManualSuccessToast(`Berhasil mencatat ${finalBooks.length} buku dibaca pada tanggal ${formatDmy(manualDate)}!`);
+      setTimeout(() => setManualSuccessToast(''), 4500);
+
+      // Otomatis arahkan filter rekap ke tanggal yang baru diinput agar staf langsung melihat hasilnya
+      if (manualDate) {
+        setPeriod('daily');
+        setSelectedDate(manualDate);
+        setSelectedMonth(manualDate.slice(0, 7));
+        setSelectedYear(manualDate.slice(0, 4));
+      }
+
+      await fetchData();
+    } catch (err) {
+      setManualErrorMsg(err.message || 'Terjadi kesalahan saat menyimpan data');
+    } finally {
+      setIsSavingManual(false);
+    }
+  };
+
+  // Hapus catatan pesanan / manual jika ada salah catat
+  const handleDeleteOrder = async (orderId) => {
+    if (!orderId) return;
+    const confirmDel = window.confirm('Yakin ingin menghapus catatan pelayanan ini dari rekapitulasi?');
+    if (!confirmDel) return;
+
+    setIsDeletingOrder(orderId);
+    try {
+      const res = await fetch(`${API_URL}/orders/${orderId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setManualSuccessToast('Catatan pelayanan berhasil dihapus.');
+        setTimeout(() => setManualSuccessToast(''), 3500);
+        await fetchData();
+      } else {
+        alert('Gagal menghapus catatan pelayanan.');
+      }
+    } catch (err) {
+      console.error('Error delete order:', err);
+      alert('Terjadi kesalahan jaringan saat menghapus.');
+    } finally {
+      setIsDeletingOrder(null);
+    }
+  };
+
+  // Helper untuk mengekstrak string tanggal YYYY-MM-DD yang presisi dan kebal zona waktu
+  const getCleanDateStr = (dateInput, order) => {
+    if (order && order.service_date && typeof order.service_date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(order.service_date)) {
+      return order.service_date.slice(0, 10);
+    }
+    if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateInput)) {
+      return dateInput.slice(0, 10);
+    }
+    if (!dateInput) return '';
     const d = new Date(dateInput);
-    if (isNaN(d.getTime())) return false;
+    if (isNaN(d.getTime())) return '';
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
-    const dateStr = `${y}-${m}-${day}`;
-    const monthStr = `${y}-${m}`;
-    const yearStr = String(y);
+    return `${y}-${m}-${day}`;
+  };
+
+  // Helper untuk mengecek apakah suatu timestamp masuk ke dalam periode terpilih
+  const matchesPeriod = (dateInput, order) => {
+    const dateStr = getCleanDateStr(dateInput, order);
+    if (!dateStr) return false;
+    const monthStr = dateStr.slice(0, 7);
+    const yearStr = dateStr.slice(0, 4);
 
     if (period === 'daily') {
       return dateStr === selectedDate;
@@ -105,7 +244,7 @@ export default function StaffRekap({ onBackToOrders }) {
 
   // 1. Data Pesanan Buku Fisik yang Terfilter Berdasarkan Periode
   const periodOrders = useMemo(() => {
-    return orders.filter(o => matchesPeriod(o.created_at));
+    return orders.filter(o => matchesPeriod(o.created_at, o));
   }, [orders, period, selectedDate, selectedMonth, selectedYear]);
 
   // 2. Data Pembaca E-Book yang Terfilter Berdasarkan Periode
@@ -162,7 +301,9 @@ export default function StaffRekap({ onBackToOrders }) {
       });
 
       const tbl = o.table_no || o.table || 'Meja';
-      tableFrequency.set(tbl, (tableFrequency.get(tbl) || 0) + 1);
+      if (tbl !== 'Baca di Tempat' && tbl !== 'Mandiri' && tbl !== '-') {
+        tableFrequency.set(tbl, (tableFrequency.get(tbl) || 0) + 1);
+      }
     });
 
     const topBooks = Array.from(bookFrequency.entries())
@@ -370,15 +511,12 @@ export default function StaffRekap({ onBackToOrders }) {
     setTablePage(1);
   }, [tableSearch, statusFilter, categoryFilter, activeService, period, selectedDate, selectedMonth, selectedYear]);
 
-  // Helper format tanggal: DD/MM/YYYY
-  const formatDmy = (dateInput) => {
-    if (!dateInput) return '-';
-    const d = new Date(dateInput);
-    if (isNaN(d.getTime())) return '-';
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    return `${day}/${month}/${year}`;
+  // Helper format tanggal: DD/MM/YYYY (kebal pergeseran zona waktu)
+  const formatDmy = (dateInput, order) => {
+    const dateStr = getCleanDateStr(dateInput, order);
+    if (!dateStr) return '-';
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
   };
 
   // ========================================================
@@ -397,7 +535,7 @@ export default function StaffRekap({ onBackToOrders }) {
 
       let counter = 1;
       sortedOrders.forEach(order => {
-        const dateStr = formatDmy(order.created_at);
+        const dateStr = formatDmy(order.created_at, order);
         const titles = parseOrderBookTitles(order.book_title || order.book);
         if (titles.length === 0) {
           dataRows.push([counter++, dateStr, '-']);
@@ -493,6 +631,26 @@ export default function StaffRekap({ onBackToOrders }) {
               <Ticket size={15} /> Antrean Tiket
             </button>
           )}
+
+          <button
+            type="button"
+            className="btn bbi-btn-sm"
+            onClick={() => {
+              setManualDate(selectedDate || todayDate);
+              setManualErrorMsg('');
+              setShowManualModal(true);
+            }}
+            title="Catat manual buku fisik yang diambil dan dibaca langsung oleh pengunjung di tempat tanpa pesan meja"
+            style={{
+              background: 'linear-gradient(135deg, #10b981, #059669)',
+              borderColor: '#34d399',
+              color: '#ffffff',
+              fontWeight: 700,
+              boxShadow: '0 2px 10px rgba(16, 185, 129, 0.35)'
+            }}
+          >
+            <Plus size={15} /> Catat Buku Manual
+          </button>
 
           <button
             type="button"
@@ -1045,8 +1203,26 @@ export default function StaffRekap({ onBackToOrders }) {
               </select>
             )}
 
-            {/* Tombol Ekspor Cepat Langsung di Header Tabel */}
+            {/* Tombol Ekspor Cepat & Catat Manual di Header Tabel */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
+              <button
+                type="button"
+                className="rekap-quick-export-btn"
+                style={{
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  borderColor: 'rgba(16, 185, 129, 0.4)',
+                  color: '#34d399',
+                  fontWeight: 600
+                }}
+                onClick={() => {
+                  setManualDate(selectedDate || todayDate);
+                  setManualErrorMsg('');
+                  setShowManualModal(true);
+                }}
+                title="Catat manual buku fisik yang dibaca langsung di tempat tanpa pesan meja"
+              >
+                <Plus size={13} /> Catat Manual
+              </button>
               <button
                 type="button"
                 className="rekap-quick-export-btn excel"
@@ -1067,7 +1243,7 @@ export default function StaffRekap({ onBackToOrders }) {
                 <th style={{ width: '50px' }}>No</th>
                 <th style={{ width: '150px' }}>Waktu Pelayanan</th>
                 {activeService === 'all' && <th style={{ width: '130px' }}>Layanan</th>}
-                <th style={{ width: '140px' }}>{activeService === 'ebooks' ? 'Kategori' : 'No. Tiket / Meja'}</th>
+                <th style={{ width: '150px' }}>{activeService === 'ebooks' ? 'Kategori' : 'Tiket / Layanan'}</th>
                 <th>Judul Buku / E-Book</th>
                 <th style={{ width: '130px', textAlign: 'center' }}>Status</th>
               </tr>
@@ -1087,10 +1263,9 @@ export default function StaffRekap({ onBackToOrders }) {
 
                   if (isPhysical) {
                     const titles = parseOrderBookTitles(row.book_title || row.book);
-                    const timeDate = row.created_at ? new Date(row.created_at).toLocaleString('id-ID', {
-                      day: '2-digit', month: '2-digit', year: 'numeric',
-                      hour: '2-digit', minute: '2-digit'
-                    }) : '-';
+                    const cleanD = getCleanDateStr(row.created_at, row);
+                    const [dy, dm, dd] = cleanD ? cleanD.split('-') : [];
+                    const timeDate = cleanD ? `${dd}/${dm}/${dy}, 10:00` : (row.created_at ? new Date(row.created_at).toLocaleDateString('id-ID') : '-');
 
                     return (
                       <tr key={`order-${row.id || idx}`}>
@@ -1101,7 +1276,25 @@ export default function StaffRekap({ onBackToOrders }) {
                         )}
                         <td>
                           <div style={{ fontWeight: 700, color: '#ffffff' }}>{row.ticket_code}</div>
-                          <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>{row.table_no || row.table}</div>
+                          {row.table_no === 'Baca di Tempat' || (row.ticket_code && row.ticket_code.startsWith('MNL-')) ? (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              marginTop: '3px',
+                              padding: '2px 7px',
+                              borderRadius: '6px',
+                              fontSize: '0.68rem',
+                              fontWeight: 700,
+                              background: 'rgba(16, 185, 129, 0.18)',
+                              color: '#34d399',
+                              border: '1px solid rgba(16, 185, 129, 0.35)'
+                            }}>
+                              Baca di Tempat
+                            </span>
+                          ) : (
+                            <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>{row.table_no || row.table}</div>
+                          )}
                         </td>
                         <td>
                           <div className="book-titles-list">
@@ -1114,12 +1307,36 @@ export default function StaffRekap({ onBackToOrders }) {
                           </div>
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          <span className={`status-pill ${row.status || 'pending'}`}>
-                            {row.status === 'completed' ? 'Selesai' :
-                             row.status === 'ready' ? 'Siap Diambil' :
-                             row.status === 'searching' ? 'Sedang Diambil' :
-                             row.status === 'cancelled' ? 'Dibatalkan' : 'Menunggu'}
-                          </span>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
+                            <span className={`status-pill ${row.status || 'pending'}`}>
+                              {row.status === 'completed' ? 'Selesai' :
+                               row.status === 'ready' ? 'Siap Diambil' :
+                               row.status === 'searching' ? 'Sedang Diambil' :
+                               row.status === 'cancelled' ? 'Dibatalkan' : 'Menunggu'}
+                            </span>
+                            {(row.table_no === 'Baca di Tempat' || (row.ticket_code && row.ticket_code.startsWith('MNL-'))) && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteOrder(row.id)}
+                                disabled={isDeletingOrder === row.id}
+                                title="Hapus catatan manual ini dari rekapitulasi"
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.15)',
+                                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                                  color: '#f87171',
+                                  borderRadius: '6px',
+                                  padding: '4px',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  transition: 'all 0.15s ease'
+                                }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1249,7 +1466,7 @@ export default function StaffRekap({ onBackToOrders }) {
               <th style={{ width: '30px' }}>No</th>
               <th style={{ width: '100px' }}>Waktu</th>
               <th style={{ width: '90px' }}>Tiket / ID</th>
-              <th style={{ width: '80px' }}>Meja/Kategori</th>
+              <th style={{ width: '90px' }}>Layanan</th>
               <th>Judul Buku / E-Book</th>
               <th style={{ width: '70px' }}>Status</th>
             </tr>
@@ -1270,7 +1487,7 @@ export default function StaffRekap({ onBackToOrders }) {
                   <td>{idx + 1}</td>
                   <td>{timeDate}</td>
                   <td>{isPhysical ? row.ticket_code : 'E-BOOK'}</td>
-                  <td>{isPhysical ? row.table_no : row.category}</td>
+                  <td>{isPhysical ? (row.table_no === 'Baca di Tempat' ? 'Baca di Tempat' : row.table_no) : row.category}</td>
                   <td>{titleText}</td>
                   <td>{isPhysical ? (row.status === 'completed' ? 'Selesai' : row.status) : 'Dibaca'}</td>
                 </tr>
@@ -1298,6 +1515,417 @@ export default function StaffRekap({ onBackToOrders }) {
           </div>
         </div>
       </div>
+
+      {/* ======================================================== */}
+      {/* TOAST NOTIFIKASI SUKSES                                  */}
+      {/* ======================================================== */}
+      {manualSuccessToast && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          zIndex: 99999,
+          background: 'linear-gradient(135deg, #10b981, #059669)',
+          color: '#ffffff',
+          padding: '12px 20px',
+          borderRadius: '12px',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          fontSize: '0.88rem',
+          fontWeight: 700,
+          border: '1px solid #6ee7b7'
+        }}>
+          <CheckCircle2 size={18} />
+          <span>{manualSuccessToast}</span>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: CATAT PELAYANAN MANUAL (BACA DI TEMPAT / TANPA MEJA) */}
+      {/* ======================================================== */}
+      {showManualModal && (
+        <div 
+          className="bbi-modal-backdrop" 
+          style={{ 
+            position: 'fixed', 
+            inset: 0, 
+            zIndex: 9999, 
+            background: 'rgba(2, 6, 23, 0.8)', 
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem'
+          }}
+          onClick={() => { if (!isSavingManual) setShowManualModal(false); }}
+        >
+          <div 
+            className="glass-panel"
+            style={{
+              width: '100%',
+              maxWidth: '560px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              background: 'linear-gradient(145deg, #1e1b4b 0%, #0f172a 100%)',
+              border: '1px solid rgba(168, 85, 247, 0.4)',
+              borderRadius: '20px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.65)',
+              padding: '1.8rem',
+              color: '#ffffff'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.2rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)'
+                }}>
+                  <BookOpen size={22} color="#ffffff" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#ffffff' }}>
+                    Catat Buku Dibaca Manual
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+                    Untuk pengunjung yang mengambil buku sendiri dari rak (baca di tempat).
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowManualModal(false)}
+                disabled={isSavingManual}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: 'none',
+                  color: '#94a3b8',
+                  borderRadius: '8px',
+                  width: '32px',
+                  height: '32px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Info Card: No Meja Dihilangkan */}
+            <div style={{
+              background: 'rgba(16, 185, 129, 0.1)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+              borderRadius: '10px',
+              padding: '0.75rem 1rem',
+              marginBottom: '1.2rem',
+              fontSize: '0.8rem',
+              color: '#6ee7b7',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
+              <span>
+                <strong>Tanpa Nomor Meja:</strong> Data ini otomatis dicatat sebagai <em>Baca di Tempat</em> dan langsung terhitung ke laporan rekapitulasi pelayanan.
+              </span>
+            </div>
+
+            {manualErrorMsg && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                color: '#fca5a5',
+                borderRadius: '10px',
+                padding: '0.65rem 0.9rem',
+                marginBottom: '1rem',
+                fontSize: '0.8rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <AlertCircle size={15} style={{ flexShrink: 0 }} />
+                <span>{manualErrorMsg}</span>
+              </div>
+            )}
+
+            {/* Form Section 1: Tanggal Pelayanan */}
+            <div style={{ marginBottom: '1.2rem' }}>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#e2e8f0', marginBottom: '6px' }}>
+                Tanggal Pelayanan (tgl/bln/thn)
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="date"
+                  value={manualDate}
+                  onChange={(e) => setManualDate(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: '0.65rem 0.9rem',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    background: 'rgba(15, 23, 42, 0.8)',
+                    color: '#ffffff',
+                    fontSize: '0.88rem',
+                    outline: 'none'
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary bbi-btn-sm"
+                  onClick={() => setManualDate(todayDate)}
+                  style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                >
+                  Hari Ini
+                </button>
+              </div>
+            </div>
+
+            {/* Form Section 2: Judul Buku (Autocomplete & Input Bebas) */}
+            <div style={{ marginBottom: '1.2rem', position: 'relative' }}>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#e2e8f0', marginBottom: '6px' }}>
+                Pilih / Ketik Judul Buku
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <input
+                    type="text"
+                    placeholder="Ketik judul buku (misal: Teori Kepribadian)..."
+                    value={manualBookInput}
+                    onChange={(e) => {
+                      setManualBookInput(e.target.value);
+                      setManualErrorMsg('');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddBookToList(manualBookInput);
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.65rem 0.9rem',
+                      paddingRight: '2rem',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      background: 'rgba(15, 23, 42, 0.8)',
+                      color: '#ffffff',
+                      fontSize: '0.88rem',
+                      outline: 'none'
+                    }}
+                  />
+                  {manualBookInput && (
+                    <button
+                      type="button"
+                      onClick={() => setManualBookInput('')}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        color: '#94a3b8',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => handleAddBookToList(manualBookInput)}
+                  style={{ padding: '0.65rem 1rem', fontSize: '0.82rem', fontWeight: 700 }}
+                >
+                  <Plus size={14} /> Tambah
+                </button>
+              </div>
+
+              {/* Floating Autocomplete Dropdown */}
+              {manualBookSuggestions.length > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  zIndex: 20,
+                  marginTop: '4px',
+                  background: '#0f172a',
+                  border: '1px solid rgba(168, 85, 247, 0.4)',
+                  borderRadius: '10px',
+                  boxShadow: '0 12px 24px rgba(0, 0, 0, 0.5)',
+                  maxHeight: '220px',
+                  overflowY: 'auto'
+                }}>
+                  <div style={{ padding: '6px 10px', fontSize: '0.7rem', fontWeight: 800, color: '#a855f7', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                    REKOMENDASI DARI KATALOG PERPUSTAKAAN ({manualBookSuggestions.length})
+                  </div>
+                  {manualBookSuggestions.map((book) => (
+                    <div
+                      key={book.id}
+                      onClick={() => handleAddBookToList(book.title)}
+                      style={{
+                        padding: '8px 12px',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                        transition: 'background 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(168, 85, 247, 0.15)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ffffff' }}>
+                        {book.title}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', gap: '8px', marginTop: '2px' }}>
+                        <span>{book.author || 'Pengarang tidak tercatat'}</span>
+                        {book.classification && <span>&bull; DDC {book.classification}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* List of Added Books */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <span style={{ fontSize: '0.78rem', color: '#cbd5e1', fontWeight: 600 }}>
+                  Daftar Buku yang Akan Dicatat ({manualBooksList.length} buku):
+                </span>
+                {manualBooksList.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setManualBooksList([])}
+                    style={{ background: 'none', border: 'none', color: '#f87171', fontSize: '0.72rem', cursor: 'pointer' }}
+                  >
+                    Hapus Semua
+                  </button>
+                )}
+              </div>
+
+              {manualBooksList.length === 0 ? (
+                <div style={{
+                  padding: '1rem',
+                  borderRadius: '10px',
+                  border: '1px dashed rgba(255, 255, 255, 0.15)',
+                  textAlign: 'center',
+                  fontSize: '0.78rem',
+                  color: '#64748b'
+                }}>
+                  Belum ada buku dalam daftar. Ketik judul di atas lalu klik "Tambah" atau pilih dari rekomendasi katalog.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '160px', overflowY: 'auto' }}>
+                  {manualBooksList.map((title, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '7px 10px',
+                        borderRadius: '8px',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        fontSize: '0.82rem'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                        <span style={{
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '50%',
+                          background: 'rgba(168, 85, 247, 0.25)',
+                          color: '#c084fc',
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          {idx + 1}
+                        </span>
+                        <span style={{ color: '#ffffff', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {title}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveBookFromList(idx)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          padding: '2px',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                        title="Hapus buku ini dari daftar"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowManualModal(false)}
+                disabled={isSavingManual}
+                style={{ padding: '0.65rem 1.2rem' }}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSaveManualOrder}
+                disabled={isSavingManual || (manualBooksList.length === 0 && !manualBookInput.trim())}
+                style={{
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  borderColor: '#34d399',
+                  padding: '0.65rem 1.4rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                {isSavingManual ? (
+                  <>
+                    <RefreshCw size={15} className="bbi-spin" />
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check size={16} />
+                    <span>Simpan Pelayanan</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
