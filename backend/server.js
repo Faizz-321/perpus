@@ -261,6 +261,7 @@ function setupAllTables() {
     pool.query('ALTER TABLE orders MODIFY COLUMN book_title TEXT NOT NULL', () => {});
     pool.query('ALTER TABLE orders MODIFY COLUMN ticket_code VARCHAR(50) NOT NULL', () => {});
     pool.query('ALTER TABLE orders MODIFY COLUMN table_no VARCHAR(100) NOT NULL', () => {});
+    pool.query('ALTER TABLE orders MODIFY COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP', () => {});
     pool.query('ALTER TABLE orders ADD COLUMN call_count INT DEFAULT 0', () => {});
     pool.query('ALTER TABLE orders ADD COLUMN last_called_at DATETIME NULL', () => {});
     pool.query('ALTER TABLE orders ADD COLUMN visitor_last_seen DATETIME NULL', () => {});
@@ -685,23 +686,14 @@ app.post('/api/orders', checkDb, (req, res) => {
     serviceDateStr = `${y}-${m}-${day}`;
   }
 
-  const query = customDate
-    ? 'INSERT INTO orders (ticket_code, book_title, table_no, status, created_at, visitor_last_seen) VALUES (?, ?, ?, ?, ?, NOW())'
-    : 'INSERT INTO orders (ticket_code, book_title, table_no, status, created_at, visitor_last_seen) VALUES (?, ?, ?, ?, NOW(), NOW())';
-  const queryParams = customDate
-    ? [ticket_code, book_title, table_no, status, customDate]
-    : [ticket_code, book_title, table_no, status];
+  const insertCreatedAt = customDate || new Date();
+  const fullQuery = `
+    INSERT INTO orders (ticket_code, book_title, table_no, status, is_manual, service_date, created_at, visitor_last_seen)
+    VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+  `;
+  const fullParams = [ticket_code, book_title, table_no, status, isManualVal, serviceDateStr, insertCreatedAt];
 
-  pool.query(query, queryParams, (err, result) => {
-    if (!err && result && result.insertId) {
-      // Sinkronkan ke kolom is_manual dan service_date jika tersedia
-      pool.query('UPDATE orders SET is_manual = ?, service_date = ? WHERE id = ?', [isManualVal, serviceDateStr, result.insertId], () => {});
-    }
-    if (err) {
-      console.error('Error POST /api/orders:', err);
-      return res.status(500).json({ error: 'Gagal membuat pesanan/catatan baru', detail: err.message });
-    }
-
+  const handlePostCompletion = (orderId) => {
     // Naikkan statistik read_count untuk buku terkait di katalog jika ada
     try {
       let rawTitles = [];
@@ -718,17 +710,48 @@ app.post('/api/orders', checkDb, (req, res) => {
       if (cleanTitles.length > 0) {
         pool.query('UPDATE books SET read_count = COALESCE(read_count, 0) + 1 WHERE title IN (?)', [cleanTitles], () => {});
       }
-    } catch {
-      // non-blocking
-    }
+    } catch {}
 
-    markVisitorOnline(result.insertId);
+    markVisitorOnline(orderId);
     res.status(201).json({
       message: 'Catatan pelayanan berhasil disimpan!',
-      orderId: result.insertId,
+      orderId: orderId,
       ticket_code: ticket_code,
-      order: { id: result.insertId, ticket_code, book_title, table_no, status, created_at: customDate || new Date() }
+      order: {
+        id: orderId,
+        ticket_code,
+        book_title,
+        table_no,
+        status,
+        is_manual: isManualVal,
+        service_date: serviceDateStr,
+        created_at: insertCreatedAt
+      }
     });
+  };
+
+  pool.query(fullQuery, fullParams, (err, result) => {
+    if (err) {
+      console.warn('Full insert gagal, mencoba fallback standard:', err.message);
+      const fallbackQuery = customDate
+        ? 'INSERT INTO orders (ticket_code, book_title, table_no, status, created_at, visitor_last_seen) VALUES (?, ?, ?, ?, ?, NOW())'
+        : 'INSERT INTO orders (ticket_code, book_title, table_no, status, created_at, visitor_last_seen) VALUES (?, ?, ?, ?, NOW(), NOW())';
+      const fallbackParams = customDate
+        ? [ticket_code, book_title, table_no, status, customDate]
+        : [ticket_code, book_title, table_no, status];
+
+      pool.query(fallbackQuery, fallbackParams, (fErr, fResult) => {
+        if (fErr) {
+          console.error('Error POST /api/orders fallback:', fErr);
+          return res.status(500).json({ error: 'Gagal membuat pesanan/catatan baru', detail: fErr.message });
+        }
+        const fallbackId = fResult.insertId;
+        pool.query('UPDATE orders SET is_manual = ?, service_date = ? WHERE id = ?', [isManualVal, serviceDateStr, fallbackId], () => {});
+        handlePostCompletion(fallbackId);
+      });
+      return;
+    }
+    handlePostCompletion(result.insertId);
   });
 });
 
@@ -2014,4 +2037,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server backend berjalan di http://localhost:${PORT}`);
   console.log(`📚 Target database: ${DB_NAME} (MySQL ${DB_HOST}:${DB_PORT})`);
+  console.log('✨ [REKAP_V2_ONLINE] Fitur Catat Tanggal Manual Presisi AKTIF!');
 });

@@ -220,7 +220,8 @@ function StaffDashboard() {
           created_at: item.created_at || null,
           visitor_online: Boolean(item.visitor_online),
           visitor_last_seen_ms: item.visitor_last_seen_ms || null,
-          is_manual: isManual
+          is_manual: isManual,
+          service_date: item.service_date || null
         };
       });
 
