@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FileText, ImageIcon, Upload, Sparkles, ListOrdered, CheckCircle2, TriangleAlert, CircleX,
   Save, ArrowLeft, Download, BookPlus, Cpu, X, Repeat, Info, LoaderCircle, Puzzle, Hand,
@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useModal } from '../context/ModalContext';
 import { extractBookList, renderCoverPages } from '../utils/bookImport/pdfReader';
-import { readAllCovers, getAiStatus } from '../utils/bookImport/coverReader';
+import { readAllCovers } from '../utils/bookImport/coverReader';
 import { matchBooksToCovers, matchByOrder, normalizeText, CONFIDENCE } from '../utils/bookImport/coverMatcher';
 import { API_URL, resolveMediaUrl } from '../config/api';
 import './BulkBookImport.css';
@@ -91,8 +91,7 @@ function BulkBookImport() {
   const [listFile, setListFile] = useState(null);
   const [coverFiles, setCoverFiles] = useState(null);
   const [mode, setMode] = useState('smart'); // smart | order
-  const [engine, setEngine] = useState('tesseract'); // tesseract | gemini
-  const [aiStatus, setAiStatus] = useState({ gemini: false });
+  const [engine, setEngine] = useState('tesseract');
   const [defaults, setDefaults] = useState({ category: 'Koleksi Umum', shelf_location: 'Rak Koleksi Utama', stock: 1 });
   const [showFormat, setShowFormat] = useState(false);
 
@@ -106,12 +105,6 @@ function BulkBookImport() {
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState(null);
 
-  useEffect(() => {
-    getAiStatus().then((s) => {
-      setAiStatus(s);
-      if (s.gemini) setEngine('gemini');
-    });
-  }, []);
 
   const coverByIndex = useMemo(() => {
     const m = new Map();
@@ -138,7 +131,7 @@ function BulkBookImport() {
   const visibleRows = onlyNeedsCheck ? rows.filter((r) => NEEDS_CHECK.has(r.confidence) || r.exists) : rows;
 
   // ------------------------------------------------------------
-  // PROSES: baca PDF → render sampul → baca tulisan → cocokkan
+  // PROSES: baca PDF ? render sampul ? baca tulisan ? cocokkan
   // ------------------------------------------------------------
   const handleProcess = async () => {
     if (!listFile) {
@@ -182,7 +175,7 @@ function BulkBookImport() {
           setProgress({
             percent: 35 + Math.round((done / Math.max(1, total)) * 58),
             stage,
-            detail: engine === 'gemini' ? 'Mesin: Gemini AI Vision' : 'Mesin: Tesseract OCR (di browser)'
+            detail: 'Mesin: Tesseract OCR (di browser)'
           })
         );
         const ocrMap = new Map(ocrResults.map((r) => [r.index, r]));
@@ -238,7 +231,7 @@ function BulkBookImport() {
   // ------------------------------------------------------------
   const updateRow = (key, patch) => setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
 
-  // Pasang sampul ke buku; jika sampul sudah dipakai buku lain → tukar
+  // Pasang sampul ke buku; jika sampul sudah dipakai buku lain ? tukar
   const assignCover = (rowKey, coverIndex) => {
     setRows((prev) => {
       const target = prev.find((r) => r.key === rowKey);
@@ -456,7 +449,7 @@ function BulkBookImport() {
               id="bbi-drop-list"
               icon={FileText}
               accent="indigo"
-              badge="Wajib · PDF Berisi Teks"
+              badge="Wajib � PDF Berisi Teks"
               title="1. PDF Daftar Judul & Penulis"
               hint="Seret file ke sini atau klik untuk memilih (.pdf). Berisi baris/tabel buku."
               accept="application/pdf,.pdf"
@@ -467,7 +460,7 @@ function BulkBookImport() {
               id="bbi-drop-covers"
               icon={ImageIcon}
               accent="amber"
-              badge="Wajib · 1 Halaman = 1 Sampul"
+              badge="Wajib � 1 Halaman = 1 Sampul"
               title="2. PDF Sampul (Urutan Boleh Acak)"
               hint="Seret file PDF sampul ke sini atau beberapa foto gambar (.jpg/.png)"
               accept="application/pdf,.pdf,image/*"
@@ -571,20 +564,6 @@ function BulkBookImport() {
                       <small>Gratis, jalan di browser (offline)</small>
                     </span>
                   </button>
-                  <button
-                    id="bbi-engine-gemini"
-                    type="button"
-                    className={`bbi-seg-btn ${engine === 'gemini' ? 'active' : ''}`}
-                    onClick={() => aiStatus.gemini && setEngine('gemini')}
-                    disabled={!aiStatus.gemini}
-                    title={aiStatus.gemini ? '' : 'Isi GEMINI_API_KEY di backend/.env lalu restart backend'}
-                  >
-                    <Cpu size={18} />
-                    <span>
-                      <b>Gemini AI Vision</b>
-                      <small>{aiStatus.gemini ? 'Akurat untuk font hias' : 'Butuh API Key di .env'}</small>
-                    </span>
-                  </button>
                 </div>
               </div>
             )}
@@ -655,7 +634,7 @@ function BulkBookImport() {
           <div className="bbi-progress-num">{progress.percent}%</div>
           {mode === 'smart' && engine === 'tesseract' && (
             <p className="bbi-muted bbi-small">
-              Pertama kali digunakan, Tesseract mengunduh modul bahasa (±10 MB). Proses berikutnya akan lebih cepat.
+              Pertama kali digunakan, Tesseract mengunduh modul bahasa (�10 MB). Proses berikutnya akan lebih cepat.
             </p>
           )}
         </div>

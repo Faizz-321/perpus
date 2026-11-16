@@ -18,6 +18,33 @@ import EBookReader from './EBookReader';
 import StaffHome from './StaffHome';
 import { API_URL, resolveMediaUrl } from '../config/api';
 
+const BOOK_STATUS_CACHE_KEY = 'staff_order_book_status_cache';
+
+const getLocalBookStatusCache = () => {
+  try {
+    const raw = localStorage.getItem(BOOK_STATUS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+const saveLocalBookStatusCache = (orderKey, statusObj) => {
+  try {
+    const cache = getLocalBookStatusCache();
+    cache[orderKey] = statusObj;
+    localStorage.setItem(BOOK_STATUS_CACHE_KEY, JSON.stringify(cache));
+  } catch {}
+};
+
+const removeLocalBookStatusCache = (orderKey) => {
+  try {
+    const cache = getLocalBookStatusCache();
+    delete cache[orderKey];
+    localStorage.setItem(BOOK_STATUS_CACHE_KEY, JSON.stringify(cache));
+  } catch {}
+};
+
 function StaffDashboard() {
   const { showAlert, showConfirm } = useModal();
   const [showTableQrModal, setShowTableQrModal] = useState(false);
@@ -210,6 +237,21 @@ function StaffDashboard() {
           timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
         const isManual = Boolean(item.is_manual) || item.table_no === 'Baca di Tempat' || item.table === 'Baca di Tempat' || (item.ticket_code && item.ticket_code.startsWith('MNL-'));
+        let serverBookStatus = {};
+        if (typeof item.book_status === 'object' && item.book_status !== null) {
+          serverBookStatus = item.book_status;
+        } else if (typeof item.book_status === 'string') {
+          try {
+            serverBookStatus = JSON.parse(item.book_status);
+          } catch {
+            serverBookStatus = {};
+          }
+        }
+
+        const localCache = getLocalBookStatusCache();
+        const cachedForOrder = localCache[item.id] || (item.ticket_code ? localCache[item.ticket_code] : null) || {};
+        const combinedBookStatus = { ...serverBookStatus, ...cachedForOrder };
+
         return {
           id: item.id,
           ticket_code: item.ticket_code || `TKT-${item.id + 1000}`,
@@ -221,7 +263,9 @@ function StaffDashboard() {
           visitor_online: Boolean(item.visitor_online),
           visitor_last_seen_ms: item.visitor_last_seen_ms || null,
           is_manual: isManual,
-          service_date: item.service_date || null
+          service_date: item.service_date || null,
+          borrower_name: item.borrower_name || 'Pengunjung',
+          book_status: combinedBookStatus
         };
       });
 
@@ -480,23 +524,70 @@ function StaffDashboard() {
   // --------------------------------------------------------
   // HANDLERS PESANAN BUKU
   // --------------------------------------------------------
-  const updateStatus = async (id, newStatus) => {
+  const updateStatus = async (id, newStatus, bookStatusToSave) => {
     setOrders((prev) =>
       prev.map((order) => (order.id === id ? { ...order, status: newStatus } : order))
     );
+
+    if (newStatus === 'completed' || newStatus === 'cancelled') {
+      removeLocalBookStatusCache(id);
+    }
 
     // Kirim sinyal seketika agar alarm pesanan di header StaffNav langsung berhenti tanpa jeda
     window.dispatchEvent(new CustomEvent('perpus_order_status_changed', { detail: { id, newStatus } }));
 
     try {
+      const body = { status: newStatus };
+      // Jika ada book_status yang perlu disimpan (saat selesai), ikutkan agar tersimpan di DB
+      if (bookStatusToSave !== undefined) {
+        body.book_status = bookStatusToSave;
+      }
       await fetch(`${API_URL}/orders/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify(body),
       });
       window.dispatchEvent(new CustomEvent('perpus_order_status_changed', { detail: { id, newStatus } }));
     } catch (err) {
       console.error('Gagal memperbarui status ke database:', err);
+    }
+  };
+
+  const handleUpdateBookStatus = async (order, bookTitle, newBookStatus) => {
+    let current = {};
+    if (typeof order.book_status === 'object' && order.book_status !== null) {
+      current = { ...order.book_status };
+    } else if (typeof order.book_status === 'string') {
+      try {
+        current = JSON.parse(order.book_status);
+      } catch {
+        current = {};
+      }
+    }
+    const cleanTitle = (bookTitle || '').trim();
+    current[cleanTitle] = newBookStatus;
+
+    // 1. Simpan seketika di localStorage agar TIDAK PERNAH tertimpa polling fetchOrders
+    saveLocalBookStatusCache(order.id, current);
+    if (order.ticket_code) {
+      saveLocalBookStatusCache(order.ticket_code, current);
+    }
+
+    // 2. Perbarui state orders seketika
+    setOrders(prev => prev.map(o => (o.id === order.id || o.ticket_code === order.ticket_code) ? { ...o, book_status: current } : o));
+
+    // 3. Simpan ke backend API (MySQL)
+    try {
+      const res = await fetch(`${API_URL}/orders/${order.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ book_status: current, status: order.status || 'pending' })
+      });
+      if (!res.ok) {
+        console.warn('Backend respons status gagal:', res.status);
+      }
+    } catch (err) {
+      console.warn('Gagal update status buku ke backend:', err);
     }
   };
 
@@ -843,7 +934,7 @@ function StaffDashboard() {
       });
 
       if (res.ok) {
-        showAlert('Barang berhasil diserahkan ke pemilik dan foto bukti serah terima telah tersimpan di database!', {
+        showAlert('Barang berhasil diserahkan ke pemilik!', {
           type: 'success',
           title: 'Serah Terima Berhasil'
         });
@@ -876,28 +967,6 @@ function StaffDashboard() {
         title: 'Nama Penerima Wajib Diisi'
       });
       return;
-    }
-
-    if (isProcessingPhoto) {
-      showAlert('Foto sedang diproses dan dikompres oleh sistem. Mohon tunggu beberapa detik...', {
-        type: 'warning',
-        title: 'Sedang Memproses Foto'
-      });
-      return;
-    }
-
-    // Jika pengguna belum mengambil foto bukti sama sekali
-    if (!handoverData.proof_photo) {
-      const proceed = await showConfirm(
-        'Foto bukti serah terima belum diambil atau belum terlampir. Apakah Anda yakin ingin menyelesaikan serah terima tanpa bukti foto?',
-        {
-          title: 'Serahkan Tanpa Foto Bukti?',
-          confirmText: 'Ya, Tetap Lanjut Tanpa Foto',
-          cancelText: 'Batal, Mau Foto Dulu',
-          type: 'warning'
-        }
-      );
-      if (!proceed) return;
     }
 
     await executeSaveHandover();
@@ -1679,16 +1748,129 @@ function StaffDashboard() {
                       Buku yang Dipesan:
                     </div>
                     <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.8rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                      {parseOrderBookTitles(order.book, bookList).map((title, idx, allTitles) => (
-                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: idx !== allTitles.length - 1 ? '6px' : '0' }}>
-                          <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(99,102,241,0.25)', color: '#a5b4fc', fontSize: '0.7rem', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {idx + 1}
-                          </span>
-                          <span style={{ fontSize: '0.95rem', fontWeight: '600', color: 'var(--text-main)' }}>
-                            {title.trim()}
-                          </span>
-                        </div>
-                      ))}
+                      {parseOrderBookTitles(order.book, bookList).map((title, idx, allTitles) => {
+                        const cleanT = title.trim();
+                        const normClean = cleanT.toLowerCase().replace(/['"`’‘]/g, "'").replace(/\s+/g, ' ').trim();
+                        let bStatus = 'ready';
+                        if (order.book_status && typeof order.book_status === 'object') {
+                          if (order.book_status[cleanT]) {
+                            bStatus = order.book_status[cleanT];
+                          } else {
+                            const matchedKey = Object.keys(order.book_status).find(k => {
+                              const normK = k.toLowerCase().replace(/['"`’‘]/g, "'").replace(/\s+/g, ' ').trim();
+                              return normK === normClean;
+                            });
+                            if (matchedKey) {
+                              bStatus = order.book_status[matchedKey];
+                            }
+                          }
+                        }
+                        const isDone = order.status === 'completed' || order.status === 'cancelled';
+
+                        return (
+                          <div key={idx} style={{ padding: '6px 0', borderBottom: idx !== allTitles.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ 
+                                  width: '20px', 
+                                  height: '20px', 
+                                  borderRadius: '50%', 
+                                  background: bStatus === 'borrowed' ? 'rgba(239,68,68,0.25)' : bStatus === 'warehouse' ? 'rgba(245,158,11,0.25)' : 'rgba(99,102,241,0.25)', 
+                                  color: bStatus === 'borrowed' ? '#fca5a5' : bStatus === 'warehouse' ? '#fde047' : '#a5b4fc', 
+                                  fontSize: '0.72rem', 
+                                  fontWeight: '700', 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center',
+                                  flexShrink: 0
+                                }}>
+                                  {idx + 1}
+                                </span>
+                                <span style={{ 
+                                  fontSize: '0.92rem', 
+                                  fontWeight: '600', 
+                                  color: bStatus === 'borrowed' ? '#94a3b8' : 'var(--text-main)', 
+                                  textDecoration: bStatus === 'borrowed' ? 'line-through' : 'none' 
+                                }}>
+                                  {cleanT}
+                                </span>
+                              </div>
+
+                              {/* Status Buku: Dropdown Rapi untuk Staf */}
+                              {!isDone ? (
+                                <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                                  <select
+                                    value={bStatus}
+                                    onChange={(e) => handleUpdateBookStatus(order, cleanT, e.target.value)}
+                                    style={{
+                                      appearance: 'none',
+                                      WebkitAppearance: 'none',
+                                      MozAppearance: 'none',
+                                      fontSize: '0.72rem',
+                                      fontWeight: '700',
+                                      padding: '3px 26px 3px 10px',
+                                      borderRadius: '14px',
+                                      border: bStatus === 'borrowed' 
+                                        ? '1px solid rgba(239, 68, 68, 0.5)' 
+                                        : bStatus === 'warehouse' 
+                                        ? '1px solid rgba(245, 158, 11, 0.5)' 
+                                        : '1px solid rgba(16, 185, 129, 0.45)',
+                                      background: bStatus === 'borrowed' 
+                                        ? 'rgba(239, 68, 68, 0.22)' 
+                                        : bStatus === 'warehouse' 
+                                        ? 'rgba(245, 158, 11, 0.22)' 
+                                        : 'rgba(16, 185, 129, 0.18)',
+                                      color: bStatus === 'borrowed' 
+                                        ? '#fca5a5' 
+                                        : bStatus === 'warehouse' 
+                                        ? '#fde047' 
+                                        : '#6ee7b7',
+                                      cursor: 'pointer',
+                                      outline: 'none',
+                                      boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
+                                    }}
+                                    title="Pilih status buku: Ada di Rak, Sedang Dipinjam, atau Di Gudang"
+                                  >
+                                    <option value="ready" style={{ background: '#1e293b', color: '#6ee7b7' }}>
+                                      Ada di Rak
+                                    </option>
+                                    <option value="borrowed" style={{ background: '#1e293b', color: '#fca5a5' }}>
+                                      Sedang Dipinjam
+                                    </option>
+                                    <option value="warehouse" style={{ background: '#1e293b', color: '#fde047' }}>
+                                      Di Gudang
+                                    </option>
+                                  </select>
+                                  <ChevronDown 
+                                    size={13} 
+                                    style={{ 
+                                      position: 'absolute', 
+                                      right: '8px', 
+                                      pointerEvents: 'none', 
+                                      color: bStatus === 'borrowed' ? '#fca5a5' : bStatus === 'warehouse' ? '#fde047' : '#6ee7b7' 
+                                    }} 
+                                  />
+                                </div>
+                              ) : (
+                                <span style={{
+                                  fontSize: '0.7rem',
+                                  fontWeight: '700',
+                                  padding: '2px 8px',
+                                  borderRadius: '12px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                  background: bStatus === 'borrowed' ? 'rgba(239, 68, 68, 0.2)' : bStatus === 'warehouse' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.18)',
+                                  color: bStatus === 'borrowed' ? '#f87171' : bStatus === 'warehouse' ? '#facc15' : '#34d399',
+                                  border: bStatus === 'borrowed' ? '1px solid rgba(239, 68, 68, 0.35)' : bStatus === 'warehouse' ? '1px solid rgba(245, 158, 11, 0.35)' : '1px solid rgba(16, 185, 129, 0.35)'
+                                }}>
+                                  {bStatus === 'borrowed' ? 'Sedang Dipinjam' : bStatus === 'warehouse' ? 'Di Gudang' : 'Ada di Rak'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                   
@@ -1713,7 +1895,7 @@ function StaffDashboard() {
                         style={{ width: '100%', padding: '0.6rem', background: 'var(--success)' }}
                         onClick={() => handleReadyAndAnnounce(order)}
                       >
-                        <Check size={18} /> 2. Buku Ditemukan & Panggil Suara
+                        <Check size={18} /> {Object.values(order.book_status || {}).includes('borrowed') ? '2. Siapkan Buku yang Ada & Panggil Pengunjung' : '2. Buku Ditemukan & Panggil Suara'}
                       </button>
                     )}
 
@@ -1776,7 +1958,19 @@ function StaffDashboard() {
                               color: 'white',
                               fontWeight: '700'
                             }} 
-                            onClick={() => updateStatus(order.id, 'completed')}
+                            onClick={() => {
+                              // Ambil book_status terkini dari localStorage cache atau dari order
+                              const localCache = getLocalBookStatusCache();
+                              const cached = localCache[order.id] || (order.ticket_code ? localCache[order.ticket_code] : null);
+                              let currentBookStatus = typeof order.book_status === 'object' && order.book_status !== null
+                                ? { ...order.book_status }
+                                : {};
+                              if (cached && typeof cached === 'object') {
+                                currentBookStatus = { ...currentBookStatus, ...cached };
+                              }
+                              // Kirim book_status agar tersimpan di DB sebelum completed
+                              updateStatus(order.id, 'completed', Object.keys(currentBookStatus).length > 0 ? currentBookStatus : undefined);
+                            }}
                           >
                             <CheckCircle size={18} /> 3. Cocokkan & Serahkan
                           </button>
@@ -2082,7 +2276,7 @@ function StaffDashboard() {
                             setHandoverData({ claimed_by: '', staff_notes: '', proof_photo: null });
                           }}
                         >
-                          <Camera size={18} /> Serahkan ke Pemilik (Foto Bukti)
+                          <CheckCircle2 size={18} /> Serahkan ke Pemilik
                         </button>
                       </div>
                     </div>
@@ -2291,7 +2485,7 @@ function StaffDashboard() {
                               });
                             }}
                           >
-                            <Camera size={18} /> Barang Ditemukan (Serah Terima & Foto)
+                            <CheckCircle2 size={18} /> Barang Ditemukan (Serahkan ke Pemilik)
                           </button>
                         </div>
                       </div>
@@ -2386,9 +2580,10 @@ function StaffDashboard() {
                         )}
                       </div>
 
-                      {/* Tombol Lihat Foto Bukti */}
-                      {item.proof_photo ? (
+                      {/* Tombol Lihat Foto Bukti (jika ada) */}
+                      {item.proof_photo && (
                         <button
+                          type="button"
                           className="btn btn-secondary"
                           style={{
                             width: '100%',
@@ -2404,36 +2599,6 @@ function StaffDashboard() {
                         >
                           <Eye size={15} /> Lihat Foto Bukti Serah Terima
                         </button>
-                      ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          <div style={{ fontSize: '0.75rem', color: '#fca5a5', textAlign: 'center' }}>
-                            (Diserahkan tanpa foto bukti)
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-secondary"
-                            style={{
-                              width: '100%',
-                              fontSize: '0.8rem',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '6px',
-                              borderColor: 'rgba(245, 158, 11, 0.4)',
-                              color: '#fde047'
-                            }}
-                            onClick={() => {
-                              setHandoverModalItem(item);
-                              setHandoverData({
-                                claimed_by: item.claimed_by || '',
-                                staff_notes: item.staff_notes || '',
-                                proof_photo: null
-                              });
-                            }}
-                          >
-                            <Camera size={14} /> Tambah / Foto Bukti Susulan
-                          </button>
-                        </div>
                       )}
                     </div>
                   ))}
@@ -3336,209 +3501,6 @@ function StaffDashboard() {
               />
             </div>
 
-            {/* AREA FOTO BUKTI SERAH TERIMA */}
-            <div style={{ background: 'rgba(0,0,0,0.3)', border: '1.5px dashed rgba(255,255,255,0.15)', borderRadius: '12px', padding: '1.2rem', textAlign: 'center', marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '0.88rem', fontWeight: '700', color: '#e2e8f0', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                <Camera size={18} color="var(--primary-color)" /> Foto Barang Bukti Serah Terima
-              </div>
-
-              {/* Hidden File Inputs untuk Kamera & Galeri (Bebas Masalah Event Bubbling Mobile) */}
-              <input 
-                ref={cameraInputRef}
-                id="handover-camera-input"
-                type="file" 
-                accept="image/jpeg,image/png,image/webp" 
-                capture="environment"
-                onChange={handleFileUpload} 
-                style={{ display: 'none' }} 
-              />
-              <input 
-                ref={galleryInputRef}
-                id="handover-gallery-input"
-                type="file" 
-                accept="image/jpeg,image/png,image/webp" 
-                onChange={handleFileUpload} 
-                style={{ display: 'none' }} 
-              />
-
-              {/* Status Sedang Memproses / Mengompres Foto */}
-              {isProcessingPhoto ? (
-                <div style={{ padding: '1.5rem 0.5rem', textAlign: 'center' }}>
-                  <div style={{
-                    width: '36px',
-                    height: '36px',
-                    margin: '0 auto 12px auto',
-                    border: '3px solid rgba(255,255,255,0.2)',
-                    borderTopColor: '#10b981',
-                    borderRadius: '50%',
-                    animation: 'spin 0.8s linear infinite'
-                  }} />
-                  <div style={{ fontSize: '0.92rem', color: '#6ee7b7', fontWeight: '700' }}>
-                    Sedang Mengompres & Memproses Foto...
-                  </div>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-                    Mohon tunggu sebentar, foto sedang disiapkan agar ringan disimpan ke server.
-                  </p>
-                </div>
-              ) : handoverData.proof_photo ? (
-                /* Tampilan Preview Foto yang Berhasil Diambil */
-                <div>
-                  <div style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'rgba(16, 185, 129, 0.2)',
-                    border: '1px solid rgba(16, 185, 129, 0.4)',
-                    color: '#a7f3d0',
-                    fontSize: '0.8rem',
-                    fontWeight: '700',
-                    padding: '4px 12px',
-                    borderRadius: '20px',
-                    marginBottom: '0.8rem'
-                  }}>
-                    <CheckCircle2 size={15} color="#10b981" /> Foto Bukti Siap Disimpan
-                  </div>
-                  <div>
-                    <img 
-                      src={resolveMediaUrl(handoverData.proof_photo)} 
-                      alt="Bukti Foto" 
-                      style={{ 
-                        maxWidth: '100%', 
-                        maxHeight: '220px', 
-                        borderRadius: '10px', 
-                        objectFit: 'contain', 
-                        border: '2px solid var(--success)', 
-                        marginBottom: '0.8rem',
-                        boxShadow: '0 4px 14px rgba(0,0,0,0.4)'
-                      }} 
-                    />
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{ fontSize: '0.8rem', padding: '0.45rem 0.9rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-                      onClick={() => cameraInputRef.current?.click()}
-                      title="Ambil foto ulang menggunakan kamera"
-                    >
-                      <Camera size={14} /> Foto Ulang (Kamera)
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{ fontSize: '0.8rem', padding: '0.45rem 0.9rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-                      onClick={() => galleryInputRef.current?.click()}
-                      title="Pilih foto lain dari galeri"
-                    >
-                      <Upload size={14} /> Ganti dari Galeri
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{ fontSize: '0.8rem', padding: '0.45rem 0.9rem', color: '#f87171', borderColor: 'rgba(239, 68, 68, 0.3)' }}
-                      onClick={() => setHandoverData(prev => ({ ...prev, proof_photo: null }))}
-                      title="Hapus foto ini"
-                    >
-                      <Trash2 size={14} /> Hapus
-                    </button>
-                  </div>
-                </div>
-              ) : isCameraActive ? (
-                /* Tampilan Video Stream Kamera Live */
-                <div>
-                  <video 
-                    ref={videoRef} 
-                    playsInline 
-                    muted 
-                    style={{ width: '100%', maxHeight: '240px', background: '#000', borderRadius: '10px', objectFit: 'cover', marginBottom: '0.8rem' }} 
-                  />
-                  <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center' }}>
-                    <button
-                      type="button"
-                      className="btn"
-                      style={{ background: 'var(--success)', padding: '0.5rem 1.2rem', fontSize: '0.85rem' }}
-                      onClick={capturePhoto}
-                    >
-                      Jepret Foto Sekarang
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{ padding: '0.5rem 0.9rem', fontSize: '0.85rem' }}
-                      onClick={stopCamera}
-                    >
-                      Tutup Kamera
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* Pilihan Buka Kamera atau Upload File */
-                <div>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                    Foto orang yang mengambil barang sebagai arsip bukti sah bahwa barang sudah diserahkan:
-                  </p>
-
-                  <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                    {/* Tombol Jepret Langsung dengan Kamera HP (Bisa di HTTP & HTTPS tanpa kendala) */}
-                    <button 
-                      type="button"
-                      className="btn" 
-                      onClick={() => cameraInputRef.current?.click()}
-                      style={{ 
-                        fontSize: '0.85rem', 
-                        cursor: 'pointer', 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
-                        gap: '6px',
-                        background: 'linear-gradient(135deg, #10b981, #059669)',
-                        color: '#ffffff',
-                        fontWeight: '700',
-                        padding: '0.65rem 1.1rem',
-                        borderRadius: '10px',
-                        boxShadow: '0 2px 10px rgba(16, 185, 129, 0.35)',
-                        border: 'none'
-                      }}
-                      title="Buka kamera HP langsung untuk memotret penerima barang"
-                    >
-                      <Camera size={18} /> Jepret Kamera HP Langsung
-                    </button>
-
-                    {/* Tombol Pilih dari Galeri HP / File Foto */}
-                    <button 
-                      type="button"
-                      className="btn btn-secondary" 
-                      onClick={() => galleryInputRef.current?.click()}
-                      style={{ 
-                        fontSize: '0.85rem', 
-                        cursor: 'pointer', 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
-                        gap: '6px',
-                        padding: '0.65rem 1rem',
-                        borderRadius: '10px'
-                      }}
-                      title="Pilih foto yang sudah ada dari galeri"
-                    >
-                      <Upload size={16} /> Pilih dari Galeri
-                    </button>
-
-                    {/* Tombol Webcam Laptop (Hanya Tampil di Laptop/PC dengan HTTPS/localhost) */}
-                    {typeof window !== 'undefined' && window.isSecureContext && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary desktop-webcam-btn"
-                        style={{ fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                        onClick={startCamera}
-                        title="Gunakan webcam bawaan laptop/PC"
-                      >
-                        <Camera size={15} /> Buka Webcam Laptop
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
             {/* Tombol Simpan Serah Terima */}
             <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'flex-end' }}>
               <button 
@@ -3571,7 +3533,7 @@ function StaffDashboard() {
                 }}
                 onClick={handleSaveHandover}
               >
-                {isSubmittingHandover ? 'Menyimpan Bukti...' : isProcessingPhoto ? 'Memproses Foto...' : 'Simpan Serah Terima & Foto Bukti'}
+                {isSubmittingHandover ? 'Menyimpan Bukti...' : isProcessingPhoto ? 'Memproses Foto...' : 'Konfirmasi Serahkan ke Pemilik'}
               </button>
             </div>
           </div>

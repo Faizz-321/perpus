@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+﻿import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Send, Loader2, Ticket, CheckCircle2, Clock, Search, BookOpen, AlertCircle, XCircle, Plus, Check, ChevronLeft, ChevronRight, ChevronDown, Bookmark, MapPin, Volume2, Star, Flame, Sparkles, MessageSquare, Bell, Lock, Eye, ArrowRight, History, Trash2 } from 'lucide-react';
@@ -14,6 +14,7 @@ const ORDER_HISTORY_KEY = 'bibliotech_order_history';
 const ACTIVE_ORDER_KEY = 'bibliotech_active_order';
 const LAST_COMPLETED_KEY = 'bibliotech_last_completed_order';
 const TABLE_NO_KEY = 'bibliotech_table_no';
+const BORROWER_NAME_KEY = 'bibliotech_borrower_name';
 
 // Ambil riwayat tiket yang tersimpan di HP pengunjung
 function getStoredOrderHistory() {
@@ -80,6 +81,14 @@ function QRSystem() {
     return localStorage.getItem(TABLE_NO_KEY) || '';
   });
 
+  const [borrowerName, setBorrowerName] = useState(() => {
+    try {
+      return localStorage.getItem(BORROWER_NAME_KEY) || '';
+    } catch (e) {
+      return '';
+    }
+  });
+
   // Sinkronisasi otomatis jika pengunjung scan QR Code meja lain
   useEffect(() => {
     if (detectedTableFromUrl) {
@@ -98,6 +107,7 @@ function QRSystem() {
   const [selectedBooks, setSelectedBooks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [onlyAvailable, setOnlyAvailable] = useState(false);
   const categories = useMemo(() => Array.from(new Set(books.map(b => b.category).filter(Boolean))), [books]);
   const [currentPage, setCurrentPage] = useState(1);
   const booksPerPage = 18;
@@ -107,7 +117,51 @@ function QRSystem() {
   const [orderHistory, setOrderHistory] = useState(getStoredOrderHistory);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [isConfirmingReceived, setIsConfirmingReceived] = useState(false);
+  const [replacingBookTitle, setReplacingBookTitle] = useState(null);
+  const [replaceSearchQuery, setReplaceSearchQuery] = useState('');
   const prevStatusRef = useRef(null);
+
+  // Handler memilih 1 buku pengganti jika ada buku yang sedang dipinjam orang lain
+  const handleSelectReplacementBook = async (newBook) => {
+    if (!newBook || !activeOrder || !replacingBookTitle) return;
+    const currentTitles = parseOrderBookTitles(activeOrder.book_title || activeOrder.books_list);
+    const updatedTitles = currentTitles.map(t => {
+      const clean = t.replace(/\[.*?\]/g, '').trim();
+      return clean.toLowerCase() === replacingBookTitle.toLowerCase().trim() ? newBook.title : t;
+    });
+
+    const newBookStatus = { ...(activeOrder.book_status || {}) };
+    delete newBookStatus[replacingBookTitle.trim()];
+    newBookStatus[newBook.title] = 'searching';
+
+    const newBookTitleStr = JSON.stringify(updatedTitles);
+
+    setActiveOrder(prev => ({
+      ...prev,
+      book_title: newBookTitleStr,
+      book_status: newBookStatus
+    }));
+
+    setReplacingBookTitle(null);
+    setReplaceSearchQuery('');
+
+    try {
+      await fetch(`${API_URL}/orders/${activeOrder.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          book_title: newBookTitleStr,
+          book_status: newBookStatus
+        })
+      });
+      showAlert(`Buku pengganti "${newBook.title}" berhasil dipilih! Staf sedang mencarikan buku ini untuk Anda.`, {
+        type: 'success',
+        title: 'Buku Pengganti Terpilih'
+      });
+    } catch (err) {
+      console.error('Gagal ganti buku:', err);
+    }
+  };
 
   // Status apakah pengunjung sedang memiliki pesanan aktif yang belum selesai/dibatalkan
   const hasActiveOrder = Boolean(
@@ -309,9 +363,18 @@ function QRSystem() {
           const previousStatus = prevStatusRef.current;
           prevStatusRef.current = data.status;
 
+          let orderBookStatus = {};
+          if (typeof data.book_status === 'object' && data.book_status !== null) {
+            orderBookStatus = data.book_status;
+          } else if (typeof data.book_status === 'string') {
+            try { orderBookStatus = JSON.parse(data.book_status); } catch {}
+          }
+
           setActiveOrder((prev) => ({
             ...prev,
             status: data.status,
+            book_status: orderBookStatus,
+            book_title: data.book_title || prev?.book_title,
             call_count: callCount,
             last_called_at: data.last_called_at
           }));
@@ -446,13 +509,18 @@ function QRSystem() {
       });
     }
 
+    // Jika filter HANYA YANG TERSEDIA aktif
+    if (onlyAvailable) {
+      result = result.filter(book => !book.is_borrowed && !book.is_warehouse);
+    }
+
     return result;
-  }, [books, selectedCategory, searchQuery]);
+  }, [books, selectedCategory, searchQuery, onlyAvailable]);
 
   // Reset ke halaman 1 jika filter berubah
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedCategory]);
+  }, [searchQuery, selectedCategory, onlyAvailable]);
 
   // Pagination
   const totalPages = Math.ceil(filteredBooks.length / booksPerPage) || 1;
@@ -461,7 +529,7 @@ function QRSystem() {
     return filteredBooks.slice(start, start + booksPerPage);
   }, [filteredBooks, currentPage]);
 
-  // Fungsi toggle pilih buku (Maksimal 5 buku)
+  // Fungsi toggle pilih buku (Maksimal 3 buku)
   const toggleBook = (book) => {
     // Jika masih ada pesanan aktif berjalan, kunci pemilihan buku (hanya boleh lihat)
     if (hasActiveOrder) {
@@ -476,8 +544,8 @@ function QRSystem() {
     if (isAlreadySelected) {
       setSelectedBooks(selectedBooks.filter(b => b.id !== book.id && b.title !== book.title));
     } else {
-      if (selectedBooks.length >= 5) {
-        showAlert('Maksimal 5 buku sekaligus per pesanan agar staf tidak kesulitan membawanya.', {
+      if (selectedBooks.length >= 3) {
+        showAlert('Maksimal 3 buku sekaligus per pesanan agar staf tidak kesulitan membawanya.', {
           type: 'warning',
           title: 'Batas Peminjaman'
         });
@@ -536,6 +604,7 @@ function QRSystem() {
           book_title: combinedTitles,
           books_list: selectedBooks.map(b => b.title),
           table_no: tableNo,
+          borrower_name: borrowerName.trim() || 'Pengunjung',
         }),
       });
 
@@ -550,6 +619,7 @@ function QRSystem() {
         book_title: combinedTitles,
         books_list: selectedBooks,
         table_no: tableNo,
+        borrower_name: borrowerName.trim() || 'Pengunjung',
         status: 'pending',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
@@ -1166,6 +1236,34 @@ function QRSystem() {
                 Terfavorit
               </button>
 
+              {/* Tombol Toggle Hanya Buku yang Tersedia */}
+              <button 
+                type="button"
+                className={`btn ${onlyAvailable ? '' : 'btn-secondary'}`}
+                style={{ 
+                  padding: '0.42rem 1rem', 
+                  fontSize: '0.84rem',
+                  borderRadius: '20px',
+                  background: onlyAvailable 
+                    ? 'linear-gradient(135deg, #10b981, #059669)' 
+                    : 'rgba(16, 185, 129, 0.1)',
+                  borderColor: onlyAvailable 
+                    ? '#10b981' 
+                    : 'rgba(16, 185, 129, 0.35)',
+                  color: onlyAvailable ? '#ffffff' : '#6ee7b7',
+                  fontWeight: '700',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: onlyAvailable ? '0 0 14px rgba(16, 185, 129, 0.5)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+                onClick={() => setOnlyAvailable(prev => !prev)}
+                title="Tampilkan hanya buku yang ada di rak dan siap dipinjam"
+              >
+                <CheckCircle2 size={14} /> Hanya yang Tersedia
+              </button>
+
               {/* Toggle Dropdown Pemilih Kategori */}
               <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
                 <select 
@@ -1261,7 +1359,7 @@ function QRSystem() {
                   fontSize: '0.85rem', 
                   fontWeight: '700' 
                 }}>
-                  Buku Dipilih: {selectedBooks.length}/5
+                  Buku Dipilih: {selectedBooks.length}/3
                 </span>
               )}
             </div>
@@ -1299,7 +1397,7 @@ function QRSystem() {
                     KERANJANG PINJAM
                   </span>
                   <span className="floating-order-count">
-                    ({selectedBooks.length}/5 Buku)
+                    ({selectedBooks.length}/3 Buku)
                   </span>
                 </div>
                 <div className="floating-order-titles" title={selectedBooks.map(b => b.title).join(' • ')}>
@@ -1513,6 +1611,52 @@ function QRSystem() {
                       >
                         <Flame size={10} fill="#ffffff" strokeWidth={0} /> FAVORIT
                       </div>
+                    ) : book.is_borrowed ? (
+                      <div 
+                        style={{ 
+                          position: 'absolute', 
+                          top: '10px', 
+                          left: '10px', 
+                          background: 'linear-gradient(135deg, #ef4444, #b91c1c)', 
+                          color: '#ffffff', 
+                          padding: '3px 8px', 
+                          borderRadius: '12px', 
+                          fontSize: '0.65rem', 
+                          fontWeight: '800', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '3px',
+                          zIndex: 3,
+                          boxShadow: '0 2px 8px rgba(239, 68, 68, 0.45)',
+                          border: '1px solid rgba(255, 255, 255, 0.3)'
+                        }}
+                        title="Buku ini saat ini sedang dipinjam atau dibaca oleh pengunjung lain"
+                      >
+                        <Clock size={10} /> Dipinjam
+                      </div>
+                    ) : book.is_warehouse ? (
+                      <div 
+                        style={{ 
+                          position: 'absolute', 
+                          top: '10px', 
+                          left: '10px', 
+                          background: 'linear-gradient(135deg, #f59e0b, #d97706)', 
+                          color: '#ffffff', 
+                          padding: '3px 8px', 
+                          borderRadius: '12px', 
+                          fontSize: '0.65rem', 
+                          fontWeight: '800', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '3px',
+                          zIndex: 3,
+                          boxShadow: '0 2px 8px rgba(245, 158, 11, 0.45)',
+                          border: '1px solid rgba(255, 255, 255, 0.3)'
+                        }}
+                        title="Buku ini saat ini sedang tidak tersedia di rak perpustakaan"
+                      >
+                        <Clock size={10} /> Tidak Tersedia
+                      </div>
                     ) : null}
 
 
@@ -1653,7 +1797,7 @@ function QRSystem() {
                     KERANJANG PINJAM
                   </span>
                   <span className="floating-order-count">
-                    ({selectedBooks.length}/5 Buku)
+                    ({selectedBooks.length}/3 Buku)
                   </span>
                 </div>
                 <div className="floating-order-titles" title={selectedBooks.map(b => b.title).join(' • ')}>
@@ -1869,7 +2013,7 @@ function QRSystem() {
               <div className="ticket-header">
                 <div style={{ fontSize: '0.8rem', letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                   <img src="/Lambang.png" alt="Lambang" style={{ width: '20px', height: '20px', objectFit: 'contain' }} />
-                  <img src="/logo-perpus.png" alt="Logo Perpus" style={{ width: '20px', height: '20px', objectFit: 'contain' }} onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
+                  <img src="/baruu.png" alt="Logo Perpus" style={{ width: '20px', height: '20px', objectFit: 'contain' }} onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
                   <img src="/logo-ilkom.png" alt="Logo Ilkom" style={{ width: '20px', height: '20px', objectFit: 'contain' }} onError={(e) => { e.currentTarget.src = '/logo ilkom.jpg'; }} />
                   PERPUSTAKAAN UMUM KOTA PAREPARE
                 </div>
@@ -1898,10 +2042,50 @@ function QRSystem() {
                     )}
                   </div>
 
+                  {/* Peringatan jika ada buku yang sedang dipinjam atau tidak tersedia */}
+                  {Object.values(activeOrder.book_status || {}).some(v => v === 'borrowed' || v === 'warehouse') && activeOrder.status !== 'completed' && (
+                    <div style={{
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      border: '1px solid rgba(239, 68, 68, 0.35)',
+                      borderRadius: '10px',
+                      padding: '0.8rem 1rem',
+                      marginBottom: '1rem',
+                      fontSize: '0.82rem',
+                      color: '#fca5a5',
+                      lineHeight: 1.5
+                    }}>
+                      <div style={{ fontWeight: '700', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px', color: '#f87171' }}>
+                        <AlertCircle size={15} /> Informasi Ketersediaan Buku
+                      </div>
+                      <div>
+                        Ada buku pesanan Anda yang sedang dipinjam atau sedang tidak tersedia. Anda dapat langsung mengambil buku-buku lain yang sudah siap di meja staf perpustakaan.
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {parseOrderBookTitles(activeOrder.book_title, books).map((titleWithShelf, idx) => {
                       const cleanT = titleWithShelf.replace(/\[.*?\]/g, '').trim();
                       const isRated = ratedBooks[cleanT];
+                      const normClean = cleanT.toLowerCase().replace(/['"`’‘]/g, "'").replace(/\s+/g, ' ').trim();
+                      let bStatus = activeOrder.status === 'ready' ? 'ready' : 'searching';
+                      if (activeOrder.book_status && typeof activeOrder.book_status === 'object') {
+                        if (activeOrder.book_status[cleanT]) {
+                          bStatus = activeOrder.book_status[cleanT];
+                        } else {
+                          const matchedKey = Object.keys(activeOrder.book_status).find(k => {
+                            const normK = k.toLowerCase().replace(/['"`’‘]/g, "'").replace(/\s+/g, ' ').trim();
+                            return normK === normClean;
+                          });
+                          if (matchedKey) {
+                            bStatus = activeOrder.book_status[matchedKey];
+                          }
+                        }
+                      }
+                      const isBorrowed = bStatus === 'borrowed';
+                      const isWarehouse = bStatus === 'warehouse';
+                      const isReady = bStatus === 'ready';
+                      const isOrderDone = activeOrder.status === 'completed' || activeOrder.status === 'cancelled';
                       const foundBook = books.find(b => b.title.toLowerCase().trim() === cleanT.toLowerCase().trim()) || {
                         id: null,
                         title: cleanT,
@@ -1913,51 +2097,133 @@ function QRSystem() {
                         <div 
                           key={idx} 
                           onClick={() => {
-                            // Tekan buku untuk langsung memunculkan modal penilaian (tanpa scroll ke bawah)
-                            openRateModalForBook(foundBook);
+                            if (isOrderDone) {
+                              openRateModalForBook(foundBook);
+                            }
                           }}
                           style={{ 
                             display: 'flex', 
                             alignItems: 'center', 
                             justifyContent: 'space-between',
-                            padding: '8px 12px',
-                            background: isRated ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 255, 255, 0.04)',
-                            border: isRated ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(250, 204, 21, 0.25)',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
+                            flexWrap: 'wrap',
+                            gap: '8px',
+                            padding: '10px 14px',
+                            background: isBorrowed ? 'rgba(239, 68, 68, 0.1)' : isWarehouse ? 'rgba(245, 158, 11, 0.1)' : isRated ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+                            border: isBorrowed ? '1px solid rgba(239, 68, 68, 0.35)' : isWarehouse ? '1px solid rgba(245, 158, 11, 0.35)' : isRated ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(250, 204, 21, 0.25)',
+                            borderRadius: '10px',
+                            cursor: isOrderDone ? 'pointer' : 'default',
                             transition: 'all 0.2s ease'
                           }}
-                          title="Tekan buku untuk beri bintang penilaian"
+                          title={isOrderDone ? 'Tekan buku untuk beri bintang penilaian' : ''}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'rgba(99,102,241,0.25)', color: '#a5b4fc', fontSize: '0.75rem', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                            <span style={{ 
+                              width: '24px', 
+                              height: '24px', 
+                              borderRadius: '50%', 
+                              background: isBorrowed ? 'rgba(239, 68, 68, 0.25)' : isWarehouse ? 'rgba(245, 158, 11, 0.25)' : 'rgba(99,102,241,0.25)', 
+                              color: isBorrowed ? '#fca5a5' : isWarehouse ? '#fde047' : '#a5b4fc', 
+                              fontSize: '0.75rem', 
+                              fontWeight: '700', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center', 
+                              flexShrink: 0 
+                            }}>
                               {idx + 1}
                             </span>
-                            <span style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-main)' }}>
-                              {cleanT}
-                            </span>
+                            <div style={{ minWidth: 0 }}>
+                              <span style={{ 
+                                fontSize: '0.98rem', 
+                                fontWeight: '600', 
+                                color: (isBorrowed || isWarehouse) ? '#cbd5e1' : 'var(--text-main)',
+                                textDecoration: (isBorrowed || isWarehouse) ? 'line-through' : 'none'
+                              }}>
+                                {cleanT}
+                              </span>
+                            </div>
                           </div>
 
-                          <div>
-                            {isRated ? (
-                              <span style={{ color: 'var(--success)', fontSize: '0.8rem', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                <CheckCircle2 size={14} /> {isRated} Bintang
-                              </span>
-                            ) : (
-                              <span style={{ 
-                                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                                color: '#ffffff',
-                                padding: '3px 9px',
-                                borderRadius: '20px',
-                                fontSize: '0.75rem',
-                                fontWeight: '700',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                boxShadow: '0 2px 8px rgba(245, 158, 11, 0.35)'
-                              }}>
-                                <Star size={11} fill="#ffffff" strokeWidth={0} /> Beri Rating
-                              </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            {/* Status Per Buku Saat Pesanan Masih Berjalan */}
+                            {!isOrderDone && (
+                              <>
+                                {isBorrowed ? (
+                                  <span style={{ 
+                                    background: 'rgba(239, 68, 68, 0.2)', 
+                                    color: '#f87171', 
+                                    fontSize: '0.74rem', 
+                                    fontWeight: '700', 
+                                    padding: '3px 8px', 
+                                    borderRadius: '12px',
+                                    border: '1px solid rgba(239, 68, 68, 0.35)'
+                                  }}>
+                                    ⚠️ Sedang Dipinjam
+                                  </span>
+                                ) : isWarehouse ? (
+                                  <span style={{ 
+                                    background: 'rgba(245, 158, 11, 0.2)', 
+                                    color: '#facc15', 
+                                    fontSize: '0.74rem', 
+                                    fontWeight: '700', 
+                                    padding: '3px 8px', 
+                                    borderRadius: '12px',
+                                    border: '1px solid rgba(245, 158, 11, 0.35)'
+                                  }}>
+                                    ⚠️ Buku Sedang Tidak Tersedia
+                                  </span>
+                                ) : isReady ? (
+                                  <span style={{ 
+                                    background: 'rgba(16, 185, 129, 0.18)', 
+                                    color: '#34d399', 
+                                    fontSize: '0.74rem', 
+                                    fontWeight: '700', 
+                                    padding: '3px 8px', 
+                                    borderRadius: '12px',
+                                    border: '1px solid rgba(16, 185, 129, 0.35)'
+                                  }}>
+                                    ✅ Siap Diambil
+                                  </span>
+                                ) : (
+                                  <span style={{ 
+                                    background: 'rgba(99, 102, 241, 0.15)', 
+                                    color: '#a5b4fc', 
+                                    fontSize: '0.74rem', 
+                                    fontWeight: '700', 
+                                    padding: '3px 8px', 
+                                    borderRadius: '12px',
+                                    border: '1px solid rgba(99, 102, 241, 0.3)'
+                                  }}>
+                                    🔍 Sedang Dicari Staf
+                                  </span>
+                                )}
+                              </>
+                            )}
+
+                            {/* Tombol Rating Saat Pesanan Selesai */}
+                            {isOrderDone && (
+                              <>
+                                {isRated ? (
+                                  <span style={{ color: 'var(--success)', fontSize: '0.8rem', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                    <CheckCircle2 size={14} /> {isRated} Bintang
+                                  </span>
+                                ) : (
+                                  <span style={{ 
+                                    background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                                    color: '#ffffff',
+                                    padding: '3px 9px',
+                                    borderRadius: '20px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '700',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    boxShadow: '0 2px 8px rgba(245, 158, 11, 0.35)'
+                                  }}>
+                                    <Star size={11} fill="#ffffff" strokeWidth={0} /> Beri Rating
+                                  </span>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>
@@ -2611,6 +2877,149 @@ function QRSystem() {
                 style={{ padding: '0.45rem 1.2rem', fontSize: '0.85rem' }}
               >
                 Tutup
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL PILIH BUKU PENGGANTI (JIKA BUKU SEDANG DIPINJAM)   */}
+      {/* ========================================================= */}
+      {replacingBookTitle && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="rate-modal-backdrop"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem'
+          }}
+          onClick={() => setReplacingBookTitle(null)}
+        >
+          <div 
+            className="rate-modal-card"
+            style={{
+              background: 'linear-gradient(135deg, #1e1b4b, #0f172a)',
+              border: '1px solid rgba(99, 102, 241, 0.4)',
+              borderRadius: '16px',
+              maxWidth: '560px',
+              width: '100%',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
+              overflow: 'hidden'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ padding: '1.2rem 1.4rem', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#ffffff', margin: 0 }}>
+                  Pilih 1 Judul Buku Pengganti
+                </h3>
+                <p style={{ fontSize: '0.8rem', color: '#fca5a5', margin: '4px 0 0 0', lineHeight: 1.4 }}>
+                  Menggantikan: <strong>"{replacingBookTitle}"</strong> yang sedang dipinjam orang lain.
+                </p>
+              </div>
+              <button 
+                onClick={() => setReplacingBookTitle(null)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '1.3rem', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Search Bar */}
+            <div style={{ padding: '0.8rem 1.4rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ position: 'relative' }}>
+                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <input 
+                  type="text"
+                  className="form-control"
+                  placeholder="Ketik judul buku pengganti yang Anda inginkan..."
+                  value={replaceSearchQuery}
+                  onChange={e => setReplaceSearchQuery(e.target.value)}
+                  style={{ paddingLeft: '2.4rem', fontSize: '0.88rem' }}
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Book List */}
+            <div style={{ padding: '1rem 1.4rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {books
+                .filter(b => {
+                  if (!b.title) return false;
+                  // Jangan tampilkan buku yang sudah ada di pesanan saat ini
+                  const currentTitles = parseOrderBookTitles(activeOrder?.book_title || activeOrder?.books_list).map(t => t.toLowerCase().trim());
+                  if (currentTitles.includes(b.title.toLowerCase().trim())) return false;
+                  if (!replaceSearchQuery.trim()) return true;
+                  return b.title.toLowerCase().includes(replaceSearchQuery.toLowerCase().trim()) ||
+                         (b.author && b.author.toLowerCase().includes(replaceSearchQuery.toLowerCase().trim()));
+                })
+                .slice(0, 20)
+                .map(book => (
+                  <div 
+                    key={book.id || book.title}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      borderRadius: '10px',
+                      padding: '10px 12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px'
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {book.title}
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                        {book.author || 'Koleksi Perpustakaan'} {book.classification ? `• DDC ${book.classification}` : ''}
+                      </div>
+                    </div>
+
+                    <button 
+                      type="button"
+                      className="btn"
+                      onClick={() => handleSelectReplacementBook(book)}
+                      style={{
+                        fontSize: '0.78rem',
+                        padding: '6px 12px',
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        color: '#ffffff',
+                        fontWeight: 700,
+                        borderRadius: '8px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        flexShrink: 0
+                      }}
+                    >
+                      Pilih Buku Ini
+                    </button>
+                  </div>
+                ))}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '0.8rem 1.4rem', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'flex-end' }}>
+              <button 
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setReplacingBookTitle(null)}
+                style={{ fontSize: '0.85rem' }}
+              >
+                Batal
               </button>
             </div>
           </div>

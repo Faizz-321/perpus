@@ -504,15 +504,6 @@ function LostFound() {
                     </div>
                   </div>
 
-                  {/* Keterangan Tulisan Teks */}
-                  <div style={{ background: 'rgba(0, 0, 0, 0.25)', padding: '0.9rem 1.1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)', marginBottom: '0.8rem' }}>
-                    <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                      {item.type === 'lost' ? 'Ciri-ciri Khusus / Keterangan Pelapor:' : 'Keterangan Staf:'}
-                    </div>
-                    <p style={{ fontSize: '0.92rem', color: '#f1f5f9', margin: 0, lineHeight: '1.5' }}>
-                      {item.description || (item.type === 'lost' ? 'Tidak ada ciri tambahan.' : 'Barang tertinggal di area perpustakaan dan disimpan aman di meja staf pelayanan.')}
-                    </p>
-                  </div>
 
                   {/* Footer Informasi & Waktu */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
@@ -608,26 +599,8 @@ function LostFound() {
                   required
                   value={formData.location}
                   onChange={e => setFormData({ ...formData, location: e.target.value })}
-                  onKeyDown={e => handleEnterKeyDown(e, descriptionRef)}
+                  onKeyDown={e => handleEnterKeyDown(e, contactRef)}
                 />
-              </div>
-
-              <div className="form-group" style={{ marginBottom: '1.1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '6px' }}>
-                  Ciri-ciri Khusus (Keterangan Tambahan)
-                </label>
-                <textarea 
-                  ref={descriptionRef}
-                  className="form-control" 
-                  rows={3}
-                  placeholder="Contoh: Kabelnya ada isolasi putih sedikit, di cas ada stiker kecil..."
-                  value={formData.description}
-                  onChange={e => setFormData({ ...formData, description: e.target.value })}
-                  onKeyDown={e => handleTextareaEnter(e, contactRef)}
-                />
-                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-                  Tekan <strong>Enter</strong> untuk pindah ke kolom nomor kontak, atau <strong>Shift + Enter</strong> untuk baris baru.
-                </span>
               </div>
 
               <div className="form-group" style={{ marginBottom: '1.5rem' }}>

@@ -267,6 +267,8 @@ function setupAllTables() {
     pool.query('ALTER TABLE orders ADD COLUMN visitor_last_seen DATETIME NULL', () => {});
     pool.query('ALTER TABLE orders ADD COLUMN is_manual TINYINT(1) DEFAULT 0', () => {});
     pool.query('ALTER TABLE orders ADD COLUMN service_date VARCHAR(20) NULL', () => {});
+    pool.query('ALTER TABLE orders ADD COLUMN borrower_name VARCHAR(255) NULL DEFAULT "Pengunjung"', () => {});
+    pool.query('ALTER TABLE orders ADD COLUMN book_status TEXT NULL', () => {});
   });
 
 
@@ -615,8 +617,16 @@ app.get('/api/orders', checkDb, (req, res) => {
         }
       }
 
+      let bookStatusObj = {};
+      try {
+        if (row.book_status) {
+          bookStatusObj = typeof row.book_status === 'object' ? row.book_status : JSON.parse(row.book_status);
+        }
+      } catch {}
+
       return {
         ...row,
+        book_status: bookStatusObj,
         service_date: serviceDate || null,
         is_manual: isManual ? 1 : 0,
         visitor_online: isOnline,
@@ -686,12 +696,16 @@ app.post('/api/orders', checkDb, (req, res) => {
     serviceDateStr = `${y}-${m}-${day}`;
   }
 
+  // Dukungan nama peminjam / orang yang meminjam buku
+  const rawBorrower = req.body.borrower_name || req.body.visitor_name || req.body.name || '';
+  const borrower_name = typeof rawBorrower === 'string' && rawBorrower.trim() ? rawBorrower.trim() : 'Pengunjung';
+
   const insertCreatedAt = customDate || new Date();
   const fullQuery = `
-    INSERT INTO orders (ticket_code, book_title, table_no, status, is_manual, service_date, created_at, visitor_last_seen)
-    VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+    INSERT INTO orders (ticket_code, book_title, table_no, borrower_name, status, is_manual, service_date, created_at, visitor_last_seen)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
   `;
-  const fullParams = [ticket_code, book_title, table_no, status, isManualVal, serviceDateStr, insertCreatedAt];
+  const fullParams = [ticket_code, book_title, table_no, borrower_name, status, isManualVal, serviceDateStr, insertCreatedAt];
 
   const handlePostCompletion = (orderId) => {
     // Naikkan statistik read_count untuk buku terkait di katalog jika ada
@@ -722,6 +736,7 @@ app.post('/api/orders', checkDb, (req, res) => {
         ticket_code,
         book_title,
         table_no,
+        borrower_name,
         status,
         is_manual: isManualVal,
         service_date: serviceDateStr,
@@ -746,7 +761,7 @@ app.post('/api/orders', checkDb, (req, res) => {
           return res.status(500).json({ error: 'Gagal membuat pesanan/catatan baru', detail: fErr.message });
         }
         const fallbackId = fResult.insertId;
-        pool.query('UPDATE orders SET is_manual = ?, service_date = ? WHERE id = ?', [isManualVal, serviceDateStr, fallbackId], () => {});
+        pool.query('UPDATE orders SET is_manual = ?, service_date = ?, borrower_name = ? WHERE id = ?', [isManualVal, serviceDateStr, borrower_name, fallbackId], () => {});
         handlePostCompletion(fallbackId);
       });
       return;
@@ -768,10 +783,18 @@ app.get('/api/orders/:id', checkDb, (req, res) => {
       return res.status(404).json({ error: 'Pesanan tidak ditemukan' });
     }
     const order = results[0];
+    let bookStatusObj = {};
+    try {
+      if (order.book_status) {
+        bookStatusObj = typeof order.book_status === 'object' ? order.book_status : JSON.parse(order.book_status);
+      }
+    } catch {}
+
     // Pengunjung sedang aktif di web melihat tiketnya
     markVisitorOnline(order.id);
     res.json({
       ...order,
+      book_status: bookStatusObj,
       visitor_online: true
     });
   });
@@ -791,13 +814,13 @@ app.post('/api/orders/:id/leave', checkDb, (req, res) => {
   res.json({ ok: true, visitor_online: false });
 });
 
-// Update status pesanan (oleh staf perpustakaan)
+// Update status pesanan & status per-buku (oleh staf atau pengunjung saat ganti buku)
 app.put('/api/orders/:id', checkDb, (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
+  const { status, book_status, book_title } = req.body;
 
   const validStatuses = ['pending', 'searching', 'ready', 'completed', 'cancelled'];
-  if (!validStatuses.includes(status)) {
+  if (status && !validStatuses.includes(status)) {
     return res.status(400).json({ error: 'Status tidak valid' });
   }
 
@@ -805,21 +828,59 @@ app.put('/api/orders/:id', checkDb, (req, res) => {
     visitorPresenceMap.delete(Number(id));
   }
 
-  const isReady = status === 'ready';
-  const query = isReady
-    ? 'UPDATE orders SET status = ?, call_count = COALESCE(call_count, 0) + 1, last_called_at = NOW() WHERE id = ?'
-    : 'UPDATE orders SET status = ? WHERE id = ?';
+  let fields = [];
+  let params = [];
 
-  pool.query(query, isReady ? [status, id] : [status, id], (err, result) => {
-    if (err) {
-      console.error('Error PUT /api/orders/:id:', err);
-      return res.status(500).json({ error: 'Gagal mengupdate status pesanan', detail: err.message });
+  if (status) {
+    fields.push('status = ?');
+    params.push(status);
+    if (status === 'ready') {
+      fields.push('call_count = COALESCE(call_count, 0) + 1');
+      fields.push('last_called_at = NOW()');
     }
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Pesanan tidak ditemukan' });
-    }
-    res.json({ message: 'Status pesanan berhasil diperbarui!', id, status });
-  });
+  }
+
+  if (book_status !== undefined) {
+    fields.push('book_status = ?');
+    params.push(typeof book_status === 'object' ? JSON.stringify(book_status) : String(book_status));
+  }
+
+  if (book_title !== undefined) {
+    fields.push('book_title = ?');
+    params.push(typeof book_title === 'object' ? JSON.stringify(book_title) : String(book_title));
+  }
+
+  if (fields.length === 0) {
+    return res.status(400).json({ error: 'Tidak ada data yang diupdate' });
+  }
+
+  params.push(id, id);
+  const query = `UPDATE orders SET ${fields.join(', ')} WHERE id = ? OR ticket_code = ?`;
+
+  const executeUpdate = (retry = true) => {
+    pool.query(query, params, (err, result) => {
+      if (err) {
+        if (retry && (err.code === 'ER_BAD_FIELD_ERROR' || (err.message && err.message.toLowerCase().includes('book_status')))) {
+          console.warn('Kolom book_status belum ada di orders, menambahkan kolom otomatis...');
+          return pool.query('ALTER TABLE orders ADD COLUMN book_status TEXT NULL', (alterErr) => {
+            if (alterErr) {
+              console.error('Gagal menambah kolom book_status:', alterErr.message);
+              return res.status(500).json({ error: 'Gagal menambah kolom status', detail: alterErr.message });
+            }
+            executeUpdate(false);
+          });
+        }
+        console.error('Error PUT /api/orders/:id:', err);
+        return res.status(500).json({ error: 'Gagal mengupdate status pesanan', detail: err.message });
+      }
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'Pesanan tidak ditemukan' });
+      }
+      res.json({ message: 'Status pesanan berhasil diperbarui!', id, status, book_status, book_title });
+    });
+  };
+
+  executeUpdate(true);
 });
 
 // Endpoint Panggil / Panggil Ulang Pesanan ke HP Pengunjung
@@ -918,9 +979,62 @@ app.get('/api/books', checkDb, (req, res) => {
       console.error('Error GET /api/books:', err);
       return res.status(500).json({ error: 'Gagal mengambil katalog buku', detail: err.message });
     }
-    // Nonaktifkan cache browser agar perubahan data, penambahan, dan penghapusan buku seketika ter-update
-    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.json(results);
+
+    // Periksa buku apa saja yang saat ini sedang dipinjam atau di gudang (tidak tersedia)
+    pool.query('SELECT book_title, book_status FROM orders WHERE status IN ("pending", "searching", "ready")', (errOrders, activeOrders) => {
+      const activeBorrowedTitles = new Set();
+      const activeWarehouseTitles = new Set();
+
+      if (!errOrders && Array.isArray(activeOrders)) {
+        activeOrders.forEach(row => {
+          let titles = [];
+          try {
+            if (row.book_title && row.book_title.startsWith('[')) {
+              titles = JSON.parse(row.book_title);
+            } else if (row.book_title) {
+              titles = [row.book_title];
+            }
+          } catch {
+            titles = [row.book_title];
+          }
+
+          let parsedStatus = {};
+          try {
+            if (row.book_status) {
+              parsedStatus = typeof row.book_status === 'object' ? row.book_status : JSON.parse(row.book_status);
+            }
+          } catch {}
+
+          titles.forEach(t => {
+            if (typeof t === 'string' && t.trim()) {
+              const clean = t.replace(/\[.*?\]/g, '').trim().toLowerCase();
+              const statusVal = parsedStatus[clean] || parsedStatus[t.trim()] || 'borrowed';
+              if (statusVal === 'warehouse') {
+                activeWarehouseTitles.add(clean);
+              } else {
+                activeBorrowedTitles.add(clean);
+              }
+            }
+          });
+        });
+      }
+
+      const enriched = results.map(book => {
+        const cleanTitle = (book.title || '').trim().toLowerCase();
+        const isBorrowed = activeBorrowedTitles.has(cleanTitle);
+        const isWarehouse = activeWarehouseTitles.has(cleanTitle);
+        return {
+          ...book,
+          is_borrowed: isBorrowed,
+          is_warehouse: isWarehouse,
+          is_unavailable: isBorrowed || isWarehouse
+        };
+      });
+
+      // Nonaktifkan cache browser agar status ketersediaan buku seketika ter-update
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.json(enriched);
+    });
   });
 });
 

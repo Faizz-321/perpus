@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Ticket, 
@@ -115,10 +115,10 @@ export default function StaffHome({ onSelectModule, ordersCount = 0, booksCount 
           />
           <div style={{ width: '1.5px', height: '44px', background: 'rgba(255,255,255,0.2)' }} />
           <img 
-            src="/logo-perpus.png" 
+            src="/baruu.png" 
             alt="Logo Dinas Perpustakaan Parepare" 
             style={{ height: '62px', width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.5))' }} 
-            onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} 
+            onError={(e) => { e.currentTarget.src = '/baruu.png'; }} 
           />
           <div style={{ width: '1.5px', height: '44px', background: 'rgba(255,255,255,0.2)' }} />
           <img 

@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+﻿import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { BookOpen, Package } from 'lucide-react';
+import { BookOpen, Package, MessageCircle } from 'lucide-react';
 
 function Home() {
   const navigate = useNavigate();
@@ -20,7 +20,7 @@ function Home() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginBottom: '1.2rem', flexWrap: 'wrap' }}>
           <img src="/Lambang.png" alt="Lambang Kota Parepare" style={{ height: '62px', width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.5))' }} />
           <div style={{ width: '1.5px', height: '44px', background: 'rgba(255,255,255,0.2)' }} />
-          <img src="/logo-perpus.png" alt="Logo Dinas Perpustakaan Parepare" style={{ height: '62px', width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.5))' }} onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
+          <img src="/baruu.png" alt="Logo Dinas Perpustakaan Parepare" style={{ height: '62px', width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.5))' }} onError={(e) => { e.currentTarget.src = '/baruu.png'; }} />
           <div style={{ width: '1.5px', height: '44px', background: 'rgba(255,255,255,0.2)' }} />
           <img src="/logo-ilkom.png" alt="Logo Ilmu Komputer ITH" style={{ height: '62px', width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.5))' }} onError={(e) => { e.currentTarget.src = '/logo ilkom.jpg'; }} />
         </div>
@@ -51,6 +51,19 @@ function Home() {
           </div>
           <h3 style={{ fontWeight: '800', fontSize: '1.3rem', color: '#ffffff', marginBottom: '0.3rem' }}>Barang Tertinggal</h3>
           <p style={{ color: '#cbd5e1', fontWeight: '500', lineHeight: 1.6 }}>Pemberitahuan barang tertinggal di perpustakaan dalam bentuk tulisan teks. Cek dan ambil di meja staf.</p>
+        </div>
+
+        <div 
+          className="feature-card glass-panel" 
+          onClick={() => window.open('https://wa.me/6285111357372?text=Halo%20Admin%20Perpustakaan%20Umum%20Kota%20Parepare,%20saya%20ingin%20menyampaikan%20pengaduan%20/%20pertanyaan.', '_blank')} 
+          style={{ cursor: 'pointer', transition: 'all 0.25s ease' }}
+          title="Klik untuk membuka WhatsApp Layanan Pengaduan"
+        >
+          <div className="feature-icon-wrapper" style={{ background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(244, 63, 94, 0.25))', color: '#f87171', boxShadow: '0 4px 15px rgba(239, 68, 68, 0.2)' }}>
+            <MessageCircle size={32} />
+          </div>
+          <h3 style={{ fontWeight: '800', fontSize: '1.3rem', color: '#ffffff', marginBottom: '0.3rem' }}>Layanan Pengaduan</h3>
+          <p style={{ color: '#cbd5e1', fontWeight: '500', lineHeight: 1.6 }}>Hubungi staf / admin perpustakaan via WhatsApp: <strong style={{ color: '#fca5a5' }}>085 111 357 372</strong> untuk bantuan & kritik saran.</p>
         </div>
       </div>
     </div>

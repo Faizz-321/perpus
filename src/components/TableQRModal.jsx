@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import { 
@@ -58,7 +58,7 @@ async function generateFullStickerDataUrl(table, qrDataUrl, baseUrl) {
   // 3. Load 3 Logo Resmi & Gambar QR
   const [logoParepare, logoPerpus, logoIlkom, qrImage] = await Promise.all([
     loadImage('/Lambang.png'),
-    loadImage('/logo-perpus.png').then(img => img || loadImage('/logo perpus.jpg')),
+    loadImage('/baruu.png').then(img => img || loadImage('/logo perpus.jpg')),
     loadImage('/logo-ilkom.png').then(img => img || loadImage('/logo ilkom.jpg')),
     loadImage(qrDataUrl)
   ]);
@@ -530,7 +530,7 @@ export default function TableQRModal({ isOpen, onClose }) {
                     <div className="table-qr-logos">
                       <img src="/Lambang.png" alt="Logo Parepare" title="Kota Parepare" />
                       <div className="table-qr-divider" />
-                      <img src="/logo-perpus.png" alt="Logo Perpustakaan" onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
+                      <img src="/baruu.png" alt="Logo Perpustakaan" onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
                       <div className="table-qr-divider" />
                       <img src="/logo-ilkom.png" alt="Logo Ilkom ITH" onError={(e) => { e.currentTarget.src = '/logo ilkom.jpg'; }} />
                     </div>

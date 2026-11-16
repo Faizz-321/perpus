@@ -1216,35 +1216,6 @@ export default function EBookReader({ isStaff: isStaffProp }) {
 
               {/* Kontrol & Pilihan Server Pratinjau */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                {/* Switcher Server Pratinjau */}
-                <div style={{ display: 'inline-flex', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '2px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                  <button
-                    type="button"
-                    onClick={() => { setViewerMode('preview'); setViewerLoading(true); }}
-                    style={{
-                      background: viewerMode === 'preview' ? 'var(--primary-color)' : 'none',
-                      color: viewerMode === 'preview' ? '#fff' : 'var(--text-muted)',
-                      border: 'none', padding: '4px 10px', borderRadius: '6px',
-                      fontSize: '0.76rem', fontWeight: '700', cursor: 'pointer'
-                    }}
-                    title="Server Pratinjau Google Drive Utama"
-                  >
-                    Server 1
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setViewerMode('docs'); setViewerLoading(true); }}
-                    style={{
-                      background: viewerMode === 'docs' ? 'var(--primary-color)' : 'none',
-                      color: viewerMode === 'docs' ? '#fff' : 'var(--text-muted)',
-                      border: 'none', padding: '4px 10px', borderRadius: '6px',
-                      fontSize: '0.76rem', fontWeight: '700', cursor: 'pointer'
-                    }}
-                    title="Server Alternatif Google Docs Viewer (Gunakan jika Server 1 lambat)"
-                  >
-                    Server 2
-                  </button>
-                </div>
 
                 <span 
                   style={{
@@ -1320,7 +1291,7 @@ export default function EBookReader({ isStaff: isStaffProp }) {
                     Memuat dokumen E-Book dari server...
                   </p>
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '4px' }}>
-                    Jika pratinjau belum tampil, coba klik Server 2 atau tombol Tab Baru di kanan atas
+                    Jika pratinjau belum tampil, coba klik tombol Tab Baru di kanan atas
                   </p>
                 </div>
               )}
@@ -1345,17 +1316,8 @@ export default function EBookReader({ isStaff: isStaffProp }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <ShieldCheck size={14} color="#34d399" />
                   <span>
-                    Dokumen ini dilindungi hak cipta perpustakaan. Jika tampilan lambat, klik <strong>Server 2</strong>.
+                    Dokumen ini dilindungi hak cipta perpustakaan.
                   </span>
-                </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button
-                    type="button"
-                    onClick={() => { setViewerMode(viewerMode === 'preview' ? 'docs' : 'preview'); setViewerLoading(true); }}
-                    style={{ background: 'none', border: 'none', color: '#a5b4fc', cursor: 'pointer', textDecoration: 'underline', fontSize: '0.78rem' }}
-                  >
-                    Ganti ke {viewerMode === 'preview' ? 'Server 2' : 'Server 1'}
-                  </button>
                 </div>
               </div>
             </div>
@@ -1407,7 +1369,7 @@ export default function EBookReader({ isStaff: isStaffProp }) {
                 onClick={() => { setShowAddEbookModal(false); resetEbookForm(); }}
                 style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem', padding: '4px' }}
               >
-                ✕
+                ?
               </button>
             </div>
 
@@ -1532,7 +1494,7 @@ export default function EBookReader({ isStaff: isStaffProp }) {
                             style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: '0 2px', fontSize: '1rem', lineHeight: 1 }}
                             title="Hapus file PDF"
                           >
-                            ✕
+                            ?
                           </button>
                         </div>
                       )}

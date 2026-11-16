@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { 
   BarChart3, Calendar, Clock, BookOpen, Tablet, TrendingUp, 
@@ -9,6 +9,76 @@ import {
 } from 'lucide-react';
 import { parseOrderBookTitles } from '../utils/orderBooks';
 import { API_URL } from '../config/api';
+
+const getLocalBookStatusCache = () => {
+  try {
+    const raw = localStorage.getItem('staff_order_book_status_cache');
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+/**
+ * Menyaring dan mengembalikan HANYA buku-buku yang benar-benar dilayani / dibaca oleh pemustaka.
+ * Buku yang berstatus 'borrowed' (sedang dipinjam orang lain) atau 'warehouse' (di gudang / tidak tersedia)
+ * otomatis TIDAK dimasukkan ke dalam rekapitulasi, sesuai prosedur operasional perpustakaan.
+ */
+export function getServedBooks(order, catalogBooks = []) {
+  if (!order) return [];
+  const allTitles = parseOrderBookTitles(order.book_title || order.book, catalogBooks);
+  if (allTitles.length === 0) return [];
+
+  // Ambil book_status dari DB
+  let statusObj = {};
+  if (typeof order.book_status === 'object' && order.book_status !== null) {
+    statusObj = order.book_status;
+  } else if (typeof order.book_status === 'string') {
+    try {
+      statusObj = JSON.parse(order.book_status);
+    } catch {
+      statusObj = {};
+    }
+  }
+
+  // Untuk pesanan yang BELUM selesai: gabungkan juga dengan localStorage cache staf
+  // (agar pilihan dropdown yang belum tersimpan ke DB tetap terbaca)
+  // Untuk pesanan SELESAI: JANGAN pakai localStorage — hanya gunakan data DB
+  if (order.status !== 'completed') {
+    const localCache = getLocalBookStatusCache();
+    const cachedForOrder = localCache[order.id] || (order.ticket_code ? localCache[order.ticket_code] : null);
+    if (cachedForOrder && typeof cachedForOrder === 'object') {
+      statusObj = { ...statusObj, ...cachedForOrder };
+    }
+  }
+
+  // Jika tidak ada data status per buku sama sekali (pesanan lama / pencatatan manual), anggap semua dilayani
+  if (Object.keys(statusObj).length === 0) {
+    return allTitles;
+  }
+
+  return allTitles.filter(title => {
+    const clean = title.replace(/\[.*?\]/g, '').trim();
+    const normClean = clean.toLowerCase().replace(/['"`’‘]/g, "'").replace(/\s+/g, ' ').trim();
+
+    let bStatus = statusObj[clean];
+    if (!bStatus) {
+      const matchedKey = Object.keys(statusObj).find(k => {
+        const normK = k.toLowerCase().replace(/['"`’‘]/g, "'").replace(/\s+/g, ' ').trim();
+        return normK === normClean;
+      });
+      if (matchedKey) {
+        bStatus = statusObj[matchedKey];
+      }
+    }
+
+    // Jika ditandai borrowed (sedang dipinjam) atau warehouse (di gudang/tidak tersedia), jangan masukkan rekap
+    if (bStatus === 'borrowed' || bStatus === 'warehouse') {
+      return false;
+    }
+    return true;
+  });
+}
 
 /**
  * Komponen Rekapitulasi Pelayanan Perpustakaan (Staf Dashboard)
@@ -287,15 +357,21 @@ export default function StaffRekap({ onBackToOrders }) {
     const statusCounts = { completed: 0, ready: 0, searching: 0, pending: 0, cancelled: 0 };
     const bookFrequency = new Map();
     const tableFrequency = new Map();
+    const borrowerFrequency = new Map();
 
     periodOrders.forEach(o => {
-      const titles = parseOrderBookTitles(o.book_title || o.book);
-      totalBookCopies += Math.max(1, titles.length);
+      const allTitles = parseOrderBookTitles(o.book_title || o.book, catalogBooks);
+      // Hitung rekap buku: hanya gunakan getServedBooks untuk pesanan yang sudah selesai
+      // Pesanan aktif / belum selesai tetap dihitung semua bukunya
+      const countTitles = o.status === 'completed'
+        ? getServedBooks(o, catalogBooks)
+        : allTitles;
+      totalBookCopies += countTitles.length;
 
       const st = o.status || 'pending';
       if (statusCounts[st] !== undefined) statusCounts[st]++;
 
-      titles.forEach(t => {
+      countTitles.forEach(t => {
         const clean = t.trim();
         if (clean) bookFrequency.set(clean, (bookFrequency.get(clean) || 0) + 1);
       });
@@ -303,6 +379,11 @@ export default function StaffRekap({ onBackToOrders }) {
       const tbl = o.table_no || o.table || 'Meja';
       if (tbl !== 'Baca di Tempat' && tbl !== 'Mandiri' && tbl !== '-') {
         tableFrequency.set(tbl, (tableFrequency.get(tbl) || 0) + 1);
+      }
+
+      const borrower = (o.borrower_name || 'Pengunjung').trim();
+      if (borrower) {
+        borrowerFrequency.set(borrower, (borrowerFrequency.get(borrower) || 0) + 1);
       }
     });
 
@@ -316,11 +397,13 @@ export default function StaffRekap({ onBackToOrders }) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
 
+    const uniqueBorrowersCount = borrowerFrequency.size;
     const completedPercent = totalTickets > 0 ? Math.round((statusCounts.completed / totalTickets) * 100) : 0;
 
     return {
       totalTickets,
       totalBookCopies,
+      uniqueBorrowersCount,
       statusCounts,
       topBooks,
       topTables,
@@ -461,10 +544,11 @@ export default function StaffRekap({ onBackToOrders }) {
     if (activeService === 'books') {
       return periodOrders.filter(o => {
         const matchStatus = statusFilter === 'all' || o.status === statusFilter;
-        const titles = parseOrderBookTitles(o.book_title || o.book).join(' ');
+        const titles = parseOrderBookTitles(o.book_title || o.book, catalogBooks).join(' ');
         const matchSearch = !q ||
           (o.ticket_code && o.ticket_code.toLowerCase().includes(q)) ||
           (o.table_no && o.table_no.toLowerCase().includes(q)) ||
+          (o.borrower_name && o.borrower_name.toLowerCase().includes(q)) ||
           titles.toLowerCase().includes(q);
         return matchStatus && matchSearch;
       });
@@ -489,9 +573,10 @@ export default function StaffRekap({ onBackToOrders }) {
     return combined.filter(item => {
       if (!q) return true;
       if (item.itemType === 'physical') {
-        const titles = parseOrderBookTitles(item.book_title || item.book).join(' ');
+        const titles = getServedBooks(item, catalogBooks).join(' ');
         return (item.ticket_code && item.ticket_code.toLowerCase().includes(q)) ||
           (item.table_no && item.table_no.toLowerCase().includes(q)) ||
+          (item.borrower_name && item.borrower_name.toLowerCase().includes(q)) ||
           titles.toLowerCase().includes(q);
       }
       return (item.title && item.title.toLowerCase().includes(q)) ||
@@ -520,8 +605,8 @@ export default function StaffRekap({ onBackToOrders }) {
   };
 
   // ========================================================
-  // EKSPOR KE EXCEL (.XLSX) - TEPAT 3 KOLOM SESUAI TEMPLATE:
-  // [No, tgl/bln/thn, Judul]
+  // EKSPOR KE EXCEL (.XLSX)
+  // Menyertakan Tanggal, Nama Peminjam, Judul Buku, Meja, Status
   // ========================================================
   const handleExportExcel = (targetType) => {
     const serviceType = targetType || activeService;
@@ -530,27 +615,31 @@ export default function StaffRekap({ onBackToOrders }) {
       // 1. Rekapitulasi Buku Fisik
       const sortedOrders = [...periodOrders].sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
       const dataRows = [
-        ['No', 'tgl/bln/thn', 'Judul']
+        ['No', 'tgl/bln/thn', 'Judul', 'Meja / Layanan', 'Status']
       ];
 
       let counter = 1;
       sortedOrders.forEach(order => {
         const dateStr = formatDmy(order.created_at, order);
-        const titles = parseOrderBookTitles(order.book_title || order.book);
-        if (titles.length === 0) {
-          dataRows.push([counter++, dateStr, '-']);
-        } else {
-          titles.forEach(title => {
-            dataRows.push([counter++, dateStr, title]);
-          });
-        }
+        // Export: untuk pesanan selesai, hanya masukkan buku yang dilayani
+        // untuk pesanan lain, masukkan semua buku
+        const titles = order.status === 'completed'
+          ? getServedBooks(order, catalogBooks)
+          : parseOrderBookTitles(order.book_title || order.book, catalogBooks);
+        const tbl = order.table_no || order.table || 'Baca di Tempat';
+        const st = order.status === 'completed' ? 'Selesai' : (order.status || 'Selesai');
+        titles.forEach(title => {
+          dataRows.push([counter++, dateStr, title, tbl, st]);
+        });
       });
 
       const ws = XLSX.utils.aoa_to_sheet(dataRows);
       ws['!cols'] = [
         { wch: 6 },
+        { wch: 18 },
+        { wch: 80 },
         { wch: 22 },
-        { wch: 110 }
+        { wch: 16 }
       ];
 
       const wb = XLSX.utils.book_new();
@@ -907,13 +996,15 @@ export default function StaffRekap({ onBackToOrders }) {
           </div>
           <div className="kpi-content">
             <span className="kpi-label">
-              {activeService === 'ebooks' ? 'Total Sesi Baca E-Book' : 'Total Tiket Pesanan'}
+              {activeService === 'ebooks' ? 'Total Sesi Baca E-Book' : 'Total Orang yang Pesan Buku'}
             </span>
             <div className="kpi-value">
-              {activeService === 'ebooks' ? ebooksStats.totalReads : ordersStats.totalTickets}
+              {activeService === 'ebooks' ? ebooksStats.totalReads : `${ordersStats.totalTickets} Orang`}
             </div>
             <span className="kpi-subtext">
-              {activeService === 'ebooks' ? `${ebooksStats.uniqueTitlesCount} judul e-book berbeda` : `Dari ${periodOrders.length} antrean meja`}
+              {activeService === 'ebooks' 
+                ? `${ebooksStats.uniqueTitlesCount} judul e-book berbeda` 
+                : `${ordersStats.totalTickets} orang pengunjung memesan buku`}
             </span>
           </div>
         </div>
@@ -930,12 +1021,12 @@ export default function StaffRekap({ onBackToOrders }) {
             <div className="kpi-value" style={{ fontSize: activeService === 'ebooks' ? '1.35rem' : '1.8rem' }}>
               {activeService === 'ebooks' 
                 ? (ebooksStats.categoriesList[0]?.category || 'Koleksi Umum')
-                : ordersStats.totalBookCopies}
+                : `${ordersStats.totalBookCopies} Buku`}
             </div>
             <span className="kpi-subtext">
               {activeService === 'ebooks' 
                 ? `${ebooksStats.categoriesList[0]?.count || 0} pembaca (${ebooksStats.categoriesList[0]?.percent || 0}%)`
-                : 'Buku fisik yang diambil dari rak'}
+                : `Rata-rata ${(ordersStats.totalBookCopies / (ordersStats.totalTickets || 1)).toFixed(1)} buku per peminjam`}
             </span>
           </div>
         </div>
@@ -1262,7 +1353,9 @@ export default function StaffRekap({ onBackToOrders }) {
                   const isPhysical = activeService === 'books' || row.itemType === 'physical';
 
                   if (isPhysical) {
-                    const titles = parseOrderBookTitles(row.book_title || row.book);
+                    // Untuk tabel detail: tampilkan semua judul (termasuk buku dipinjam/gudang)
+                    // getServedBooks hanya dipakai untuk statistik, bukan tampilan tabel
+                    const titles = parseOrderBookTitles(row.book_title || row.book, catalogBooks);
                     const cleanD = getCleanDateStr(row.created_at, row);
                     const [dy, dm, dd] = cleanD ? cleanD.split('-') : [];
                     const timeDate = cleanD ? `${dd}/${dm}/${dy}, 10:00` : (row.created_at ? new Date(row.created_at).toLocaleDateString('id-ID') : '-');
@@ -1297,14 +1390,20 @@ export default function StaffRekap({ onBackToOrders }) {
                           )}
                         </td>
                         <td>
-                          <div className="book-titles-list">
-                            {titles.map((t, ti) => (
-                              <div key={ti} className="book-title-item">
-                                {titles.length > 1 && <span className="title-bullet">&bull;</span>}
-                                <span>{t}</span>
-                              </div>
-                            ))}
-                          </div>
+                          {titles.length > 0 ? (
+                            <div className="book-titles-list">
+                              {titles.map((t, ti) => (
+                                <div key={ti} className="book-title-item">
+                                  {titles.length > 1 && <span className="title-bullet">&bull;</span>}
+                                  <span>{t}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                              (Semua buku sedang dipinjam / tidak tersedia)
+                            </span>
+                          )}
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
@@ -1408,7 +1507,7 @@ export default function StaffRekap({ onBackToOrders }) {
         <div className="print-kop-header">
           <div className="kop-logos">
             <img src="/Lambang.png" alt="Lambang Parepare" style={{ width: '55px', height: 'auto' }} />
-            <img src="/logo-perpus.png" alt="Logo Perpus" style={{ width: '55px', height: 'auto' }} onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
+            <img src="/baruu.png" alt="Logo Perpus" style={{ width: '55px', height: 'auto' }} onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
             <img src="/logo-ilkom.png" alt="Logo ITH" style={{ width: '55px', height: 'auto' }} onError={(e) => { e.currentTarget.src = '/logo ilkom.jpg'; }} />
           </div>
           <div className="kop-text">
@@ -1478,8 +1577,9 @@ export default function StaffRekap({ onBackToOrders }) {
                 ? (row.created_at ? new Date(row.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-')
                 : (row.read_at ? new Date(row.read_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-');
 
+              const servedTitles = isPhysical ? getServedBooks(row, catalogBooks) : [];
               const titleText = isPhysical 
-                ? parseOrderBookTitles(row.book_title || row.book).join('; ')
+                ? (servedTitles.length > 0 ? servedTitles.join('; ') : '(Buku Sedang Dipinjam / Tidak Tersedia)')
                 : row.title;
 
               return (

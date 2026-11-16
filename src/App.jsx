@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, Component } from 'react';
+﻿import { useState, useEffect, useCallback, useRef, Component } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate, useSearchParams } from 'react-router-dom';
 import { 
   BookOpen, Users, Package, Home as HomeIcon, Bell, LogOut, 
@@ -73,7 +73,7 @@ function CustomerNav({ onLogout }) {
       <Link to="/" className="logo-area">
         <div className="logos-group">
           <img src="/Lambang.png" alt="Lambang Kota Parepare" className="logo-img" />
-          <img src="/logo-perpus.png" alt="Logo Dinas Perpustakaan" className="logo-img" onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
+          <img src="/baruu.png" alt="Logo Dinas Perpustakaan" className="logo-img" onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
           <img src="/logo-ilkom.png" alt="Logo Ilmu Komputer ITH" className="logo-img" onError={(e) => { e.currentTarget.src = '/logo ilkom.jpg'; }} />
         </div>
         <span className="logo-title">Perpustakaan Umum Kota Parepare</span>
@@ -253,7 +253,7 @@ function StaffNav({ onLogout, notifCount }) {
       <Link to="/staff?tab=portal" className="logo-area" title="Ke Beranda Portal Staf">
         <div className="logos-group">
           <img src="/Lambang.png" alt="Lambang Kota Parepare" className="logo-img" />
-          <img src="/logo-perpus.png" alt="Logo Dinas Perpustakaan" className="logo-img" onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
+          <img src="/baruu.png" alt="Logo Dinas Perpustakaan" className="logo-img" onError={(e) => { e.currentTarget.src = '/logo perpus.jpg'; }} />
           <img src="/logo-ilkom.png" alt="Logo Ilmu Komputer ITH" className="logo-img" onError={(e) => { e.currentTarget.src = '/logo ilkom.jpg'; }} />
         </div>
         <span className="logo-title">
