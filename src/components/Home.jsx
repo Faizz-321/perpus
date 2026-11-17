@@ -1,4 +1,4 @@
-﻿import { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BookOpen, Package, MessageCircle } from 'lucide-react';
 
@@ -41,8 +41,8 @@ function Home() {
           <div className="feature-icon-wrapper" style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(6, 182, 212, 0.25))', color: '#34d399', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.2)' }}>
             <BookOpen size={32} />
           </div>
-          <h3 style={{ fontWeight: '800', fontSize: '1.3rem', color: '#ffffff', marginBottom: '0.3rem' }}>Baca E-Book Online</h3>
-          <p style={{ color: '#cbd5e1', fontWeight: '500', lineHeight: 1.6 }}>900+ koleksi buku digital resmi (Novel, Biografi, Inspirasi, Tips & Trik, Bacaan Anak). Baca langsung gratis di HP.</p>
+          <h3 style={{ fontWeight: '800', fontSize: '1.3rem', color: '#ffffff', marginBottom: '0.3rem' }}>Baca E-Book</h3>
+          <p style={{ color: '#cbd5e1', fontWeight: '500', lineHeight: 1.6 }}>Perpustakaan Umum Kota Parepare menyediakan koleksi E-Book digital melalui aplikasi resmi perpustakaan. Silakan klik.</p>
         </div>
 
         <div className="feature-card glass-panel" onClick={() => navigate('/lost-found')} style={{ cursor: 'pointer', transition: 'all 0.25s ease' }}>

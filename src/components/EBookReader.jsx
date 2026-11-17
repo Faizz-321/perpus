@@ -596,9 +596,124 @@ export default function EBookReader({ isStaff: isStaffProp }) {
 
   return (
     <div className="ebooks-container" style={{ maxWidth: '1240px', margin: '0 auto', paddingBottom: '5rem' }}>
-      {/* Banner Header */}
-      <div className="glass-panel" style={{ marginBottom: '2rem', padding: '2.2rem 2rem', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'relative', zIndex: 1 }}>
+
+      {/* ============================================================
+          TAMPILAN KHUSUS PENGUNJUNG: Redirect ke Play Store
+          ============================================================ */}
+      {!isStaff && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: '0' }}>
+          {/* Card utama */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(99,102,241,0.18) 0%, rgba(16,185,129,0.12) 100%)',
+            border: '1.5px solid rgba(99,102,241,0.35)',
+            borderRadius: '24px',
+            padding: '3rem 2.5rem',
+            maxWidth: '520px',
+            width: '100%',
+            textAlign: 'center',
+            boxShadow: '0 8px 40px rgba(99,102,241,0.18)',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            {/* Dekorasi latar */}
+            <div style={{
+              position: 'absolute', top: '-40px', right: '-40px',
+              width: '160px', height: '160px',
+              background: 'radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%)',
+              borderRadius: '50%'
+            }} />
+            <div style={{
+              position: 'absolute', bottom: '-40px', left: '-40px',
+              width: '140px', height: '140px',
+              background: 'radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)',
+              borderRadius: '50%'
+            }} />
+
+            {/* Icon buku */}
+            <div style={{
+              width: '80px', height: '80px', borderRadius: '20px',
+              background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 1.5rem',
+              boxShadow: '0 8px 24px rgba(99,102,241,0.4)'
+            }}>
+              <BookOpen size={38} color="#ffffff" />
+            </div>
+
+            {/* Judul */}
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.4)',
+              padding: '0.3rem 0.85rem', borderRadius: '20px',
+              color: '#a5b4fc', fontSize: '0.75rem', fontWeight: '700',
+              marginBottom: '1rem', letterSpacing: '0.5px'
+            }}>
+              <Sparkles size={12} /> KOLEKSI DIGITAL PERPUSTAKAAN
+            </div>
+
+            <h2 style={{ fontSize: '1.6rem', fontWeight: '800', color: '#ffffff', marginBottom: '0.75rem', letterSpacing: '-0.3px', lineHeight: 1.3 }}>
+              E-Book Perpustakaan<br />Tersedia di Aplikasi Resmi
+            </h2>
+
+            <p style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: 1.7, marginBottom: '0.5rem' }}>
+              Perpustakaan Umum Kota Parepare menyediakan koleksi E-Book digital melalui <strong style={{ color: '#cbd5e1' }}>aplikasi resmi perpustakaan</strong>.
+            </p>
+            <p style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: 1.7, marginBottom: '2rem' }}>
+              Silakan <strong style={{ color: '#a5b4fc' }}>download di Play Store</strong> — khusus untuk pengguna Android.
+            </p>
+
+            {/* Tombol Play Store */}
+            <a
+              href="https://play.google.com/store/apps/details?id=id.kubuku.kbk11925c4"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '12px',
+                background: 'linear-gradient(135deg, #1a1a2e, #16213e)',
+                border: '1.5px solid rgba(255,255,255,0.15)',
+                borderRadius: '14px',
+                padding: '0.85rem 1.8rem',
+                textDecoration: 'none',
+                color: '#ffffff',
+                boxShadow: '0 6px 24px rgba(0,0,0,0.4)',
+                transition: 'all 0.2s ease',
+                marginBottom: '1.2rem'
+              }}
+              onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+            >
+              {/* Logo Play Store SVG */}
+              <svg width="28" height="28" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M7.4 4.5C6.5 5 6 6 6 7.3v33.4c0 1.3.5 2.3 1.4 2.8l.2.1 18.7-18.7v-.4L7.4 4.5z" fill="#00D2FF"/>
+                <path d="M32.1 30.8l-6.2-6.2v-.5l6.2-6.2.1.1 7.4 4.2c2.1 1.2 2.1 3.1 0 4.3l-7.4 4.2-.1.1z" fill="#FFD700"/>
+                <path d="M32.3 30.7L25.9 24.3 7.4 42.5c.7.7 1.8.8 3 .1l21.9-11.9z" fill="#FF3D00"/>
+                <path d="M32.3 17.3L10.4 5.4c-1.2-.7-2.3-.6-3 .1l18.5 18.5 6.4-6.7z" fill="#00E676"/>
+              </svg>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: '0.68rem', color: '#94a3b8', letterSpacing: '0.3px' }}>Tersedia di</div>
+                <div style={{ fontSize: '1.05rem', fontWeight: '700', letterSpacing: '-0.2px' }}>Google Play</div>
+              </div>
+              <ExternalLink size={16} color="#94a3b8" style={{ marginLeft: '4px' }} />
+            </a>
+
+            {/* Info tambahan */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              color: '#64748b', fontSize: '0.78rem'
+            }}>
+              <CheckCircle2 size={13} color="#34d399" />
+              Gratis · Resmi · Koleksi Lengkap Perpustakaan
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          TAMPILAN KHUSUS STAF: Katalog E-Book lengkap (tidak berubah)
+          ============================================================ */}
+      {isStaff && (<>
+        <div className="glass-panel" style={{ marginBottom: '2rem', padding: '2.2rem 2rem', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: '8px',
             background: isStaff ? 'rgba(16, 185, 129, 0.2)' : 'rgba(99, 102, 241, 0.2)',
@@ -1631,6 +1746,7 @@ export default function EBookReader({ isStaff: isStaffProp }) {
           </div>
         </div>
       )}
+      </>)}
     </div>
   );
 }
